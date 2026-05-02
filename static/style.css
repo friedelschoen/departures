@@ -10,6 +10,10 @@ table {
 /*    table-layout: fixed;*/
 }
 
+th {
+    background: #fafafa;
+}
+
 th, td {
 	padding: .5rem;
 	border-bottom: 1px solid #ddd;
