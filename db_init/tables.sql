@@ -245,17 +245,18 @@ CREATE TABLE IF NOT EXISTS kv6_journey_status (
 	)
 );
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_feeds_active
-	ON gtfs_feeds(active);
+CREATE INDEX IF NOT EXISTS idx_gtfs_feeds_active_imported
+	ON gtfs_feeds (imported_at DESC)
+	WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_gtfs_stops_parent
 	ON gtfs_stops(feed_ref, parent_station);
 
+CREATE INDEX IF NOT EXISTS idx_gtfs_stops_code
+	ON gtfs_stops(feed_ref, stop_code);
+
 CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_stop
 	ON gtfs_stop_times(feed_ref, stop_id, departure_time);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_trip
-	ON gtfs_stop_times(feed_ref, trip_id, stop_sequence);
 
 CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route
 	ON gtfs_trips(feed_ref, route_id);
@@ -263,83 +264,20 @@ CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route
 CREATE INDEX IF NOT EXISTS idx_gtfs_trips_service
 	ON gtfs_trips(feed_ref, service_id);
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_service_date
-	ON gtfs_calendar_dates(feed_ref, service_id, date);
+CREATE INDEX IF NOT EXISTS idx_gtfs_trips_realtime_match
+	ON gtfs_trips(feed_ref, realtime_trip_id, realtime_trip_sequence, service_id);
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_shapes_shape
-	ON gtfs_shapes(feed_ref, shape_id, shape_pt_sequence);
+CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_active_service_date
+	ON gtfs_calendar_dates(feed_ref, service_id, date)
+	WHERE exception_type = 1;
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_trip_bounds_trip
-	ON gtfs_trip_bounds(feed_ref, trip_id);
+CREATE INDEX IF NOT EXISTS idx_kv6_status_day_key
+	ON kv6_journey_status(operating_day, journey_key, timestamp DESC);
 
-CREATE INDEX IF NOT EXISTS idx_kv6_journey_status_key
-	ON kv6_journey_status(journey_key);
+CREATE INDEX IF NOT EXISTS idx_kv6_status_day_vehicle
+	ON kv6_journey_status(operating_day, data_owner_code, vehicle_number, timestamp DESC)
+	WHERE vehicle_number IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_kv6_journey_status_vehicle
-	ON kv6_journey_status(vehicle_number);
-
-CREATE INDEX IF NOT EXISTS idx_kv6_journey_status_block
-	ON kv6_journey_status(block_code);
-
-CREATE INDEX IF NOT EXISTS idx_kv6_journey_status_stop
-	ON kv6_journey_status(user_stop_code);
-
-
---
---
--- ---
---
--- CREATE INDEX IF NOT EXISTS idx_gtfs_trips_realtime_trip_id
--- 	ON gtfs_trips(feed_ref, realtime_trip_id);
---
--- CREATE INDEX IF NOT EXISTS idx_gtfs_trips_trip_short_name
--- 	ON gtfs_trips(feed_ref, trip_short_name);
---
--- CREATE INDEX IF NOT EXISTS idx_kv6_status_day_key
--- 	ON kv6_journey_status(operating_day, journey_key);
---
--- CREATE INDEX IF NOT EXISTS idx_kv6_status_day_block
--- 	ON kv6_journey_status(operating_day, data_owner_code, block_code);
---
--- CREATE INDEX IF NOT EXISTS idx_kv6_status_day_vehicle
--- 	ON kv6_journey_status(operating_day, data_owner_code, vehicle_number);
---
--- CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_date_service
--- 	ON gtfs_calendar_dates(feed_ref, date, service_id, exception_type);
---
--- CREATE INDEX IF NOT EXISTS idx_gtfs_routes_agency
--- 	ON gtfs_routes(feed_ref, agency_id);
---
-CREATE INDEX ON gtfs_feeds (imported_at DESC)
-WHERE active = true;
-
-CREATE INDEX ON gtfs_stops (feed_ref, stop_id);
-CREATE INDEX ON gtfs_stops (feed_ref, parent_station);
-CREATE INDEX ON gtfs_stops (feed_ref, stop_code);
-
-CREATE INDEX ON gtfs_stop_times (feed_ref, stop_id, trip_id);
-CREATE INDEX ON gtfs_stop_times (feed_ref, trip_id, stop_sequence, stop_id);
-
-CREATE INDEX ON gtfs_trips (feed_ref, trip_id);
-CREATE INDEX ON gtfs_trips (feed_ref, realtime_trip_id, service_id);
-
-CREATE INDEX ON gtfs_calendar_dates (feed_ref, service_id, date)
-WHERE exception_type = 1;
-
-CREATE INDEX ON gtfs_routes (feed_ref, route_id);
-CREATE INDEX ON gtfs_agency (feed_ref, agency_id);
-CREATE INDEX ON gtfs_trip_bounds (feed_ref, trip_id);
-
-CREATE INDEX ON kv6_journey_status (
-	operating_day,
-	journey_key,
-	timestamp DESC
-);
-
-CREATE INDEX ON kv6_journey_status (
-	operating_day,
-	data_owner_code,
-	vehicle_number,
-	timestamp DESC
-)
-WHERE vehicle_number IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kv6_current_stop
+	ON kv6_journey_status(user_stop_code, timestamp DESC)
+	WHERE vehicle_number IS NOT NULL;
