@@ -27,6 +27,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +37,6 @@ import (
 )
 
 const staleAfter = 12 * time.Hour
-const retryTime = 1 * time.Hour
 
 func activeFeedIsStale(db *sql.DB) (bool, error) {
 	var importedAt time.Time
@@ -94,8 +95,8 @@ func insertFeed(tx *sql.Tx, row map[string]string) (int64, bool, error) {
 			active
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, false)
-		ON CONFLICT (feed_id, feed_version)
-		DO UPDATE SET imported_at = now()
+--		ON CONFLICT (feed_id, feed_version)
+--		DO UPDATE SET imported_at = now()
 		RETURNING id, xmax = 0
 	`,
 		nullString(row["feed_publisher_name"]),
@@ -124,7 +125,7 @@ func activateFeed(tx *sql.Tx, feedRef int64) error {
 	return err
 }
 
-func importAgency(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importAgency(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_agency (
 				feed_ref,
@@ -152,7 +153,7 @@ func importAgency(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importCalendarDates(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importCalendarDates(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_calendar_dates (
 				feed_ref,
@@ -176,7 +177,7 @@ func importCalendarDates(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importRoutes(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importRoutes(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_routes (
 				feed_ref,
@@ -212,7 +213,7 @@ func importRoutes(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importShapes(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importShapes(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_shapes (
 				feed_ref,
@@ -240,7 +241,7 @@ func importShapes(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importStops(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importStops(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_stops (
 				feed_ref,
@@ -280,7 +281,7 @@ func importStops(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importTrips(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importTrips(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_trips (
 				feed_ref,
@@ -322,7 +323,7 @@ func importTrips(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
 	})
 }
 
-func importStopTimes(tx *sql.Tx, feedRef int64, a *zip.Reader) error {
+func importStopTimes(tx *sql.Tx, feedRef int64, a string) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_stop_times (
 				feed_ref,
@@ -385,9 +386,9 @@ func readFirstRow(rc io.Reader) (map[string]string, error) {
 	return result, nil
 }
 
-func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[string]string) []any) error {
+func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[string]string) []any) error {
 	fmt.Println("open ", filename)
-	rc, err := a.Open(filename)
+	rc, err := os.Open(filepath.Join(tmpdir, filename))
 	if err != nil {
 		return err
 	}
@@ -418,8 +419,8 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 		}
 
 		off := r.InputOffset()
-		if prevOff-off > 1000 {
-			fmt.Printf("\r%s %5.1f - %dkB / %dkB", filename, 100*float64(off)/float64(totalSize), off/1000, totalSize/1000)
+		if off-prevOff > 1000000 {
+			fmt.Printf("%s - %5.1f%% - %dMB / %dMB\n", filename, 100*float64(off)/float64(totalSize), off/1000000, totalSize/1000000)
 
 			prevOff = off
 		}
@@ -439,7 +440,7 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 		}
 	}
 	_, err = stmt.Exec()
-	fmt.Println()
+	fmt.Printf("%s - 100.0%% - %dMB / %dMB\n", filename, totalSize/1000000, totalSize/1000000)
 	return err
 }
 
@@ -499,12 +500,8 @@ func nullString(s string) any {
 	return s
 }
 
-func calculateTripBounds(tx *sql.Tx, feedRef int64) error {
-	if _, err := tx.Exec(`SET LOCAL work_mem = '512MB'`); err != nil {
-		return err
-	}
-
-	if _, err := tx.Exec(`ANALYZE gtfs_stop_times`); err != nil {
+func calculateTripBounds(tx *sql.DB, feedRef int64) error {
+	if _, err := tx.Exec(`SET LOCAL work_mem = '1GB'`); err != nil {
 		return err
 	}
 
@@ -532,19 +529,15 @@ INSERT INTO gtfs_trip_bounds (
 	start_time,
 	end_time,
 	start_sequence,
-	end_sequence,
-	start_stop,
-	end_stop
+	end_sequence
 )
 SELECT
 	b.feed_ref,
 	b.trip_id,
-	COALESCE(start_st.departure_time, start_st.arrival_time) AS start_time,
-	COALESCE(end_st.arrival_time, end_st.departure_time) AS end_time,
+	COALESCE(start_st.departure_time, start_st.arrival_time),
+	COALESCE(end_st.arrival_time, end_st.departure_time),
 	b.start_sequence,
-	b.end_sequence,
-	start_st.stop_id AS start_stop,
-	end_st.stop_id AS end_stop
+	b.end_sequence
 FROM bounds b
 JOIN gtfs_stop_times start_st
 	ON start_st.feed_ref = b.feed_ref
@@ -559,6 +552,155 @@ JOIN gtfs_stop_times end_st
 	}
 
 	return nil
+}
+
+var gtfsFiles = []string{"agency.txt", "feed_info.txt", "shapes.txt", "stops.txt", "trips.txt",
+	"calendar_dates.txt", "routes.txt", "stop_times.txt", "transfers.txt"}
+
+func unpackFile(dest string, f *zip.File) error {
+	if !slices.Contains(gtfsFiles, f.Name) {
+		return nil
+	}
+
+	instream, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer instream.Close()
+
+	destpath := filepath.Join(dest, f.Name)
+	outstream, err := os.Create(destpath)
+	if err != nil {
+		return err
+	}
+	defer outstream.Close()
+
+	n, err := io.Copy(outstream, instream)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("unpacked %s - %d bytes copied\n", f.Name, n)
+	return nil
+}
+
+func unpack(dest string, buf []byte) error {
+	zr, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
+	if err != nil {
+		return err
+	}
+
+	for _, f := range zr.File {
+		if err := unpackFile(dest, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func importData(db *sql.DB, gtfsURL string) (int64, error) {
+	needsUpdate, err := activeFeedIsStale(db)
+	if err != nil {
+		return 0, err
+	}
+	if !needsUpdate {
+		return 0, os.ErrExist
+	}
+
+	log.Println("downloading GTFS:", gtfsURL)
+
+	buf, err := download(gtfsURL)
+	if err != nil {
+		return 0, err
+	}
+
+	zr, err := os.MkdirTemp("", "gtfs_updater")
+	if err != nil {
+		return 0, err
+	}
+	defer os.RemoveAll(zr)
+
+	if err := unpack(zr, buf); err != nil {
+		return 0, err
+	}
+
+	file, err := os.Open(filepath.Join(zr, "feed_info.txt"))
+	if err != nil {
+		return 0, err
+	}
+	feedInfo, err := readFirstRow(file)
+	if err != nil {
+		return 0, err
+	}
+	file.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	feedRef, imported, err := insertFeed(tx, feedInfo)
+	if err != nil {
+		return 0, err
+	}
+
+	if !imported {
+		log.Printf("feed already exists; activating feed_ref=%d\n", feedRef)
+		if err := activateFeed(tx, feedRef); err != nil {
+			return 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		return 0, os.ErrExist
+	}
+
+	log.Printf("importing new feed_ref=%d\n", feedRef)
+
+	err = importAgency(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+	err = importCalendarDates(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+	err = importRoutes(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+	// err = importShapes(tx, feedRef, zr)
+	// if err != nil {
+	// 	return err
+	// }
+	err = importStops(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+	err = importTrips(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+	err = importStopTimes(tx, feedRef, zr)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := activateFeed(tx, feedRef); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	// insert done!
+
+	err = calculateTripBounds(db, feedRef)
+	if err != nil {
+		return 0, err
+	}
+	return feedRef, nil
 }
 
 func main() {
@@ -583,126 +725,16 @@ func main() {
 	}
 
 	for {
-		needsUpdate, err := activeFeedIsStale(db)
-		if err != nil {
-			log.Fatal(err)
-			return
+		feedRef, err := importData(db, gtfsURL)
+		if err == os.ErrExist {
+			log.Printf("GTFS import already exist\n")
+			time.Sleep(12 * time.Hour)
+		} else if err != nil {
+			log.Printf("GTFS import failed: %v\n", err)
+			time.Sleep(10 * time.Minute)
+		} else {
+			log.Printf("GTFS import complete; active feed_ref=%d\n", feedRef)
+			time.Sleep(12 * time.Hour)
 		}
-		if !needsUpdate {
-			log.Println("active GTFS feed is younger than ", staleAfter, "; nothing to do")
-			time.Sleep(retryTime)
-			continue
-		}
-
-		log.Println("downloading GTFS:", gtfsURL)
-
-		buf, err := download(gtfsURL)
-		if err != nil {
-			log.Println(err)
-			time.Sleep(retryTime)
-			continue
-		}
-
-		zr, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		file, err := zr.Open("feed_info.txt")
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		feedInfo, err := readFirstRow(file)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		file.Close()
-
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		defer tx.Rollback()
-
-		feedRef, imported, err := insertFeed(tx, feedInfo)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		if !imported {
-			log.Printf("feed already exists; activating feed_ref=%d\n", feedRef)
-			if err := activateFeed(tx, feedRef); err != nil {
-				log.Fatal(err)
-				return
-			}
-			if err := tx.Commit(); err != nil {
-				log.Fatal(err)
-				return
-			}
-			time.Sleep(retryTime)
-			continue
-		}
-
-		log.Printf("importing new feed_ref=%d\n", feedRef)
-
-		err = importAgency(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		err = importCalendarDates(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		err = importRoutes(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		// err = importShapes(tx, feedRef, zr)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// 	return
-		// }
-		err = importStops(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		err = importTrips(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		err = importStopTimes(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		err = calculateTripBounds(tx, feedRef)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		if err := activateFeed(tx, feedRef); err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		if err := tx.Commit(); err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		log.Printf("GTFS import complete; active feed_ref=%d\n", feedRef)
-		time.Sleep(retryTime)
 	}
 }
