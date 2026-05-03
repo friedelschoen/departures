@@ -393,6 +393,11 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 	}
 	defer rc.Close()
 
+	var totalSize int64
+	if fileinfo, err := rc.Stat(); err == nil {
+		totalSize = fileinfo.Size()
+	}
+
 	r := csv.NewReader(rc)
 	r.FieldsPerRecord = -1
 
@@ -401,6 +406,7 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 		return err
 	}
 
+	var prevOff int64
 	row := make(map[string]string, len(header))
 	for {
 		rec, err := r.Read()
@@ -409,6 +415,13 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 		}
 		if err != nil {
 			return err
+		}
+
+		off := r.InputOffset()
+		if prevOff-off > 1000 {
+			fmt.Printf("\r%s %5.1f - %dkB / %dkB", filename, 100*float64(off)/float64(totalSize), off/1000, totalSize/1000)
+
+			prevOff = off
 		}
 
 		for k := range row {
@@ -426,6 +439,7 @@ func insertCSV(stmt *sql.Stmt, a *zip.Reader, filename string, fn func(map[strin
 		}
 	}
 	_, err = stmt.Exec()
+	fmt.Println()
 	return err
 }
 
@@ -486,10 +500,22 @@ func nullString(s string) any {
 }
 
 func calculateTripBounds(tx *sql.Tx, feedRef int64) error {
-	_, err := tx.Exec(`
-DELETE FROM gtfs_trip_bounds
-WHERE feed_ref = $1;
+	if _, err := tx.Exec(`SET LOCAL work_mem = '512MB'`); err != nil {
+		return err
+	}
 
+	if _, err := tx.Exec(`ANALYZE gtfs_stop_times`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+	DELETE FROM gtfs_trip_bounds
+	WHERE feed_ref = $1;
+	`, feedRef); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
 WITH bounds AS (
 	SELECT
 		feed_ref,
@@ -497,6 +523,7 @@ WITH bounds AS (
 		min(stop_sequence) AS start_sequence,
 		max(stop_sequence) AS end_sequence
 	FROM gtfs_stop_times
+	WHERE feed_ref = $1
 	GROUP BY feed_ref, trip_id
 )
 INSERT INTO gtfs_trip_bounds (
@@ -512,8 +539,8 @@ INSERT INTO gtfs_trip_bounds (
 SELECT
 	b.feed_ref,
 	b.trip_id,
-	start_st.departure_time AS start_time,
-	end_st.arrival_time AS end_time,
+	COALESCE(start_st.departure_time, start_st.arrival_time) AS start_time,
+	COALESCE(end_st.arrival_time, end_st.departure_time) AS end_time,
 	b.start_sequence,
 	b.end_sequence,
 	start_st.stop_id AS start_stop,
@@ -527,8 +554,11 @@ JOIN gtfs_stop_times end_st
 	ON end_st.feed_ref = b.feed_ref
    AND end_st.trip_id = b.trip_id
    AND end_st.stop_sequence = b.end_sequence;
-`, feedRef)
-	return err
+`, feedRef); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
@@ -635,11 +665,11 @@ func main() {
 			log.Fatal(err)
 			return
 		}
-		err = importShapes(tx, feedRef, zr)
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
+		// err = importShapes(tx, feedRef, zr)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// 	return
+		// }
 		err = importStops(tx, feedRef, zr)
 		if err != nil {
 			log.Fatal(err)
