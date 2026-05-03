@@ -22,7 +22,7 @@ WITH active_feed AS (
 	ORDER BY imported_at DESC
 	LIMIT 1
 )
-SELECT DISTINCT ON (k.vehicle_number)
+SELECT 
 	r.route_id,
 	r.route_short_name,
 	r.route_color,
@@ -40,6 +40,7 @@ SELECT DISTINCT ON (k.vehicle_number)
     FALSE, -- terminal
 
 	k.status,
+    EXTRACT(EPOCH FROM k.timestamp)::bigint,
     k.punctuality,
 	k.vehicle_number,
 	k.block_code,
@@ -74,6 +75,6 @@ WHERE k.vehicle_number IS NOT NULL
   AND (s.stop_id = $1 OR s.parent_station = $1)
   AND k.status IN ('ARRIVAL', 'ONSTOP', 'INIT')
   AND k.timestamp > now() - interval '5 minutes'
-ORDER BY k.vehicle_number,
+ORDER BY 
     (cd.date::timestamp + st.departure_time)
-		AT TIME ZONE a.agency_timezone ASC;
+		AT TIME ZONE a.agency_timezone ASC, k.vehicle_number;

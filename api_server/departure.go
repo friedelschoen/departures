@@ -19,7 +19,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"net/http"
 
 	"github.com/dylandreimerink/go-rijksdriehoek"
@@ -37,6 +36,7 @@ type Vehicle struct {
 	Headsign *string `json:"headsign"`
 
 	Status       *string `json:"status"`
+	LastSeen     *int64  `json:"last_seen"`
 	DelayMinutes int     `json:"delay_minutes"`
 	BlockCode    *int    `json:"block_code"`
 	Lat          float64 `json:"latitude"`
@@ -60,22 +60,27 @@ type Departure struct {
 	Lat           float64  `json:"latitude"`
 	Lon           float64  `json:"longitude"`
 	Status        *string  `json:"status"`
+	LastSeen      *int64   `json:"last_seen"`
 	Vehicle       *Vehicle `json:"vehicle,omitempty"`
 }
 
 //go:embed sql/departure.sql
 var departureSQL string
 
-func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
-	stopID := r.URL.Query().Get("stop")
-	if stopID == "" {
-		stopID = defaultStopID
+func (s *Server) departures(r *http.Request, params map[string]string) (any, error) {
+	q := r.URL.Query()
+	fromInterval := "5 minutes"
+	toInterval := "2 hours"
+	if q.Has("from") {
+		fromInterval = q.Get("from")
+	}
+	if q.Has("to") {
+		toInterval = q.Get("to")
 	}
 
-	rows, err := s.db.Query(departureSQL, stopID)
+	rows, err := s.db.Query(departureSQL, params["stop"], fromInterval, toInterval)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -100,6 +105,7 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 			&d.ScheduledTime,
 			&d.Terminal,
 			&d.Status,
+			&d.LastSeen,
 			&punctuality,
 			&d.VehicleNumber,
 			&d.BlockCode,
@@ -115,13 +121,13 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 			&veh.TripID,
 			&veh.Headsign,
 			&veh.Status,
+			&veh.LastSeen,
 			&vehPunctuality,
 			&veh.BlockCode,
 			&vehRdx,
 			&vehRdy,
 		); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
 		d.DelayMinutes = punctuality / 60
@@ -143,13 +149,8 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := rows.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"source": "https://github.com/friedelschoen/departures",
-		"departures": out,
-	})
+	return out, nil
 }

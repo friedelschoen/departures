@@ -18,15 +18,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	_ "github.com/lib/pq"
 )
-
-const defaultStopID = "stoparea:449933"
 
 type Server struct {
 	db *sql.DB
@@ -50,12 +52,41 @@ func main() {
 
 	s := &Server{db: db}
 
-	http.HandleFunc("/api/departures", s.departures)
-	http.HandleFunc("/api/buffer", s.stationBuffer)
-	http.HandleFunc("/api/stop_info", s.stopinfo)
-	http.HandleFunc("/api/stop_query", s.stopQuery)
-	http.HandleFunc("/", http.NotFound)
+	mux := APIHandleMux{
+		{[]string{"GET"}, "/api/departures/:stop", s.departures},
+		{[]string{"GET"}, "/api/buffer/:stop", s.stationBuffer},
+		{[]string{"GET"}, "/api/stop/:stop", s.stopinfo},
+		{[]string{"GET"}, "/api/stop_query", s.stopQuery},
+	}
 
-	log.Println("api_server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Starting server on %s", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
 }

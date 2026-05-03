@@ -255,8 +255,6 @@ CREATE INDEX IF NOT EXISTS idx_gtfs_stops_parent
 CREATE INDEX IF NOT EXISTS idx_gtfs_stops_code
 	ON gtfs_stops(feed_ref, stop_code);
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_stop
-	ON gtfs_stop_times(feed_ref, stop_id, departure_time);
 
 CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route
 	ON gtfs_trips(feed_ref, route_id);

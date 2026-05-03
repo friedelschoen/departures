@@ -44,6 +44,7 @@ vehicle_context AS (
 		vt.trip_headsign,
 
 		vk.status,
+        vk.timestamp,
 		COALESCE(vk.punctuality, 0) AS punctuality,
 		vk.block_code,
 		vk.rd_x,
@@ -53,25 +54,25 @@ vehicle_context AS (
 		vtb.start_sequence
 	FROM kv6_journey_status vk
 	JOIN active_feed af ON true
-	LEFT JOIN gtfs_trips vt
+	JOIN gtfs_trips vt
 		ON vt.feed_ref = af.id
 	   AND vt.realtime_trip_id = vk.journey_key
 	   AND vt.realtime_trip_sequence = 1
-	LEFT JOIN gtfs_calendar_dates vcd
+	JOIN gtfs_calendar_dates vcd
 		ON vcd.feed_ref = vt.feed_ref
 	   AND vcd.service_id = vt.service_id
 	   AND vcd.date = vk.operating_day
 	   AND vcd.exception_type = 1
-	LEFT JOIN gtfs_routes vr
+	JOIN gtfs_routes vr
 		ON vr.feed_ref = vt.feed_ref
 	   AND vr.route_id = vt.route_id
-	LEFT JOIN gtfs_trip_bounds vtb
+	JOIN gtfs_trip_bounds vtb
 		ON vtb.feed_ref = vt.feed_ref
 	   AND vtb.trip_id = vt.trip_id
-	LEFT JOIN gtfs_stops vs
+	JOIN gtfs_stops vs
 		ON vs.feed_ref = vt.feed_ref
 	   AND vs.stop_code = vk.user_stop_code
-	LEFT JOIN gtfs_stop_times vst
+	JOIN gtfs_stop_times vst
 		ON vst.feed_ref = vt.feed_ref
 	   AND vst.trip_id = vt.trip_id
        AND vst.stop_id = vs.stop_id
@@ -101,11 +102,12 @@ SELECT
 	st.stop_sequence = tb.end_sequence,
 
 	k.status,
+    EXTRACT(EPOCH FROM k.timestamp)::bigint,
 	CASE 
 		WHEN vc.stop_sequence = vc.start_sequence 
 		THEN GREATEST(COALESCE(k.punctuality, 0), 0)
 		ELSE COALESCE(k.punctuality, 0)
-	END AS punctuality,
+	END AS final_punctuality,
 
 	k.vehicle_number,
 	k.block_code,
@@ -124,6 +126,7 @@ SELECT
 	vc.trip_headsign,
 
 	vc.status,
+    EXTRACT(EPOCH FROM vc.timestamp)::bigint,
 	COALESCE(vc.punctuality, 0),
 	vc.block_code,
 	vc.rd_x,
@@ -166,8 +169,8 @@ WHERE (s.stop_id = $1 OR s.parent_station = $1)
   AND (
 		(cd.date::timestamp + st.departure_time)
 			AT TIME ZONE a.agency_timezone
-	  ) BETWEEN now() - interval '5 minutes'
-	        AND now() + interval '2 hours'
+	  ) BETWEEN now() - $2::INTERVAL
+	        AND now() + $3::INTERVAL
 ORDER BY
-	(cd.date::timestamp + st.departure_time)
-		AT TIME ZONE a.agency_timezone ASC;
+	((cd.date::timestamp + st.departure_time)
+		AT TIME ZONE a.agency_timezone) ASC;

@@ -95,8 +95,8 @@ func insertFeed(tx *sql.Tx, row map[string]string) (int64, bool, error) {
 			active
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, false)
---		ON CONFLICT (feed_id, feed_version)
---		DO UPDATE SET imported_at = now()
+		ON CONFLICT (feed_id, feed_version)
+		DO UPDATE SET imported_at = now()
 		RETURNING id, xmax = 0
 	`,
 		nullString(row["feed_publisher_name"]),
@@ -387,7 +387,7 @@ func readFirstRow(rc io.Reader) (map[string]string, error) {
 }
 
 func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[string]string) []any) error {
-	fmt.Println("open ", filename)
+	log.Println("open ", filename)
 	rc, err := os.Open(filepath.Join(tmpdir, filename))
 	if err != nil {
 		return err
@@ -420,7 +420,7 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 
 		off := r.InputOffset()
 		if off-prevOff > 1000000 {
-			fmt.Printf("%s - %5.1f%% - %dMB / %dMB\n", filename, 100*float64(off)/float64(totalSize), off/1000000, totalSize/1000000)
+			log.Printf("%s - %5.1f%% - %dMB / %dMB\n", filename, 100*float64(off)/float64(totalSize), off/1000000, totalSize/1000000)
 
 			prevOff = off
 		}
@@ -440,7 +440,7 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 		}
 	}
 	_, err = stmt.Exec()
-	fmt.Printf("%s - 100.0%% - %dMB / %dMB\n", filename, totalSize/1000000, totalSize/1000000)
+	log.Printf("%s - 100.0%% - %dMB / %dMB\n", filename, totalSize/1000000, totalSize/1000000)
 	return err
 }
 
@@ -500,11 +500,12 @@ func nullString(s string) any {
 	return s
 }
 
-func calculateTripBounds(tx *sql.DB, feedRef int64) error {
+func calculateTripBounds(tx *sql.Tx, feedRef int64) error {
 	if _, err := tx.Exec(`SET LOCAL work_mem = '1GB'`); err != nil {
 		return err
 	}
 
+	log.Println("Clearing trip_bounds...")
 	if _, err := tx.Exec(`
 	DELETE FROM gtfs_trip_bounds
 	WHERE feed_ref = $1;
@@ -512,6 +513,7 @@ func calculateTripBounds(tx *sql.DB, feedRef int64) error {
 		return err
 	}
 
+	log.Println("Filling trip_bounds...")
 	if _, err := tx.Exec(`
 WITH bounds AS (
 	SELECT
@@ -529,15 +531,19 @@ INSERT INTO gtfs_trip_bounds (
 	start_time,
 	end_time,
 	start_sequence,
-	end_sequence
+	end_sequence,
+	start_stop,
+	end_stop
 )
 SELECT
 	b.feed_ref,
 	b.trip_id,
-	COALESCE(start_st.departure_time, start_st.arrival_time),
-	COALESCE(end_st.arrival_time, end_st.departure_time),
+	COALESCE(start_st.departure_time, start_st.arrival_time) AS start_time,
+	COALESCE(end_st.arrival_time, end_st.departure_time) AS end_time,
 	b.start_sequence,
-	b.end_sequence
+	b.end_sequence,
+	start_st.stop_id AS start_stop,
+	end_st.stop_id AS end_stop
 FROM bounds b
 JOIN gtfs_stop_times start_st
 	ON start_st.feed_ref = b.feed_ref
@@ -546,8 +552,30 @@ JOIN gtfs_stop_times start_st
 JOIN gtfs_stop_times end_st
 	ON end_st.feed_ref = b.feed_ref
    AND end_st.trip_id = b.trip_id
-   AND end_st.stop_sequence = b.end_sequence;
-`, feedRef); err != nil {
+   AND end_st.stop_sequence = b.end_sequence;`, feedRef); err != nil {
+		return err
+	}
+
+	log.Println("Filling realtime_trip_sequence...")
+	if _, err := tx.Exec(`
+WITH seq AS (
+	SELECT
+		feed_ref,
+		trip_id,
+		row_number() OVER (
+			PARTITION BY feed_ref, service_id, realtime_trip_id
+			ORDER BY trip_id
+		) AS n
+	FROM gtfs_trips
+	WHERE feed_ref = $1
+	  AND realtime_trip_id IS NOT NULL
+)
+UPDATE gtfs_trips t
+SET realtime_trip_sequence = seq.n
+FROM seq
+WHERE t.feed_ref = seq.feed_ref
+  AND t.trip_id = seq.trip_id;
+ `, feedRef); err != nil {
 		return err
 	}
 
@@ -579,7 +607,7 @@ func unpackFile(dest string, f *zip.File) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("unpacked %s - %d bytes copied\n", f.Name, n)
+	log.Printf("unpacked %s - %d bytes copied\n", f.Name, n)
 	return nil
 }
 
@@ -694,12 +722,25 @@ func importData(db *sql.DB, gtfsURL string) (int64, error) {
 		return 0, err
 	}
 
+	log.Println("Import done! Finishing...")
+
 	// insert done!
 
-	err = calculateTripBounds(db, feedRef)
+	tx, err = db.Begin()
 	if err != nil {
 		return 0, err
 	}
+	defer tx.Rollback()
+
+	err = calculateTripBounds(tx, feedRef)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
 	return feedRef, nil
 }
 

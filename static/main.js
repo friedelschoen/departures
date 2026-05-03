@@ -65,12 +65,18 @@ function vehicleContextText(v) {
 	const delay = v.delay_minutes
 		? ` (${delayText(v.delay_minutes)})`
 		: "";
-
-	return `
+    
+    const lastseen = (Date.now() / 1000) - v.last_seen;
+	const lastseenText = !v.last_seen ? ''
+        : lastseen < 30 ? " &mdash; just now"
+        : lastseen < 60 ? ` &mdash; ${Math.round(lastseen)}s ago`
+        : ` &mdash; ${Math.round(lastseen / 60)}min ago`;
+    
+    return `
 		<span class="context-label">currently</span>
 		<b>${esc(v.line)} ${esc(v.headsign ?? "")}</b>
 		&mdash; ${statusText(v.status, esc(v.stop_name))}</b>
-		${delay}
+		${delay}${lastseenText}
 	`;
 }
 
@@ -93,7 +99,7 @@ function vehicleLink(d) {
 	return `<a target="_blank" href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${id}</a>`;
 }
 
-function renderDepartureRow(d) {
+function renderDepartureRow(d, markDelay) {
 	const tr = document.createElement("tr");
 	tr.className = "departure-row";
 
@@ -103,12 +109,20 @@ function renderDepartureRow(d) {
 
 	const scheduleTime = new Date(d.scheduled_time * 1000);
 	const realtimeTime = new Date(d.realtime_time * 1000);
+	const lastseen = (Date.now() / 1000) - d.last_seen;
 
 	const time = d.scheduled_time === d.realtime_time
 		? `<b>${hhmm(scheduleTime)}</b>`
 		: `<s>${esc(hhmm(scheduleTime))}</s> <b>${esc(hhmm(realtimeTime))}</b>`;
 
-	const delay = d.delay_minutes >= 0
+    const lastseenText = !d.last_seen ? "" 
+        : lastseen < 30 ? "Now"
+        : lastseen < 60 ? `${Math.round(lastseen)}s ago`
+        : `${Math.round(lastseen / 60)}min ago`;
+
+	let delay = d.delay_minutes;
+
+    if (markDelay) delay = d.delay_minutes >= 0
 		? (d.delay_minutes !== 0 ? "+" + d.delay_minutes : "0")
 		: d.delay_minutes;
 
@@ -120,10 +134,11 @@ function renderDepartureRow(d) {
 		<td>${esc(d.headsign)}</td>
         <!--<td>${d.blockcode ? esc(d.blockcode) : ""}</td>-->
 		<td>${time}</td>
-		<td class="${d.delay_minutes > 0 ? "delay" : ""}">
+		<td class="${d.delay_minutes > 0 && markDelay ? "delay" : ""}">
 			${d.cancelled ? "cancelled" : (vehicle || d.delay_minutes !== 0 ? delay + " min" : "")}
 		</td>
 		<td>${vehicle}</td>
+		<td>${lastseenText}</td>
 	`;
 
 	return tr;
@@ -139,20 +154,20 @@ async function loadStopInfo() {
 	const params = new URL(document.location.toString()).searchParams;
 	const stop = params.get("stop");
 
-	const res = await fetch("/api/stop_info?stop=" + encodeURIComponent(stop));
+	const res = await fetch("/api/stop/" + encodeURIComponent(stop));
 	const stopinfo = await res.json();
 
-	document.getElementById("stopname").textContent = stopinfo.stop.stop_name ?? "?";
+	document.getElementById("stopname").innerHTML = `Departures for <i>${esc(stopinfo.result.stop_name)}</i>`;
 }
 
-async function loadDepartures(element, endpoint, insertNow = true) {
+async function loadDepartures(element, endpoint, insertNow = true, markDelay = true) {
 	const params = new URL(document.location.toString()).searchParams;
 	const stop = params.get("stop");
 	const showTerminal = params.get("show-terminal");
 
-    const res = await fetch(`/api/${endpoint}?stop=` + encodeURIComponent(stop));
-	const deps = await res.json() ?? [];
-
+    const res = await fetch(`/api/${endpoint}/` + encodeURIComponent(stop));
+	const result = await res.json();
+    const deps = result.result ?? [];
 
 	const rows = document.getElementById(element);
 	rows.innerHTML = "";
@@ -161,7 +176,7 @@ async function loadDepartures(element, endpoint, insertNow = true) {
 	let nowInserted = !insertNow;
 	const now = new Date();
 
-	for (const d of deps.departures) {
+	for (const d of deps) {
 		if (!showTerminal && d.terminal) continue;
 
 		const scheduleTime = new Date(d.scheduled_time * 1000);
@@ -182,7 +197,7 @@ async function loadDepartures(element, endpoint, insertNow = true) {
 			nowInserted = true;
 		}
 
-		rows.appendChild(renderDepartureRow(d));
+		rows.appendChild(renderDepartureRow(d, markDelay));
 		insertContextRow(rows, vehicleContextText(d.vehicle));
 	}
 
@@ -207,7 +222,7 @@ stopInput.addEventListener("input", async () => {
 
 	stopResults.innerHTML = "";
 
-	for (const s of stops.stops) {
+	for (const s of stops.result) {
 		const div = document.createElement("div");
 		div.style.padding = "4px";
 		div.style.cursor = "pointer";
@@ -224,9 +239,9 @@ stopInput.addEventListener("input", async () => {
 
 loadStopInfo();
 loadDepartures("rows", "departures");
-loadDepartures("buffer", "buffer", false);
+loadDepartures("buffer", "buffer", false, false);
 setInterval(() => {
     loadDepartures("rows", "departures");
-    loadDepartures("buffer", "buffer", false);
+    loadDepartures("buffer", "buffer", false, false);
 }, 15000);
 

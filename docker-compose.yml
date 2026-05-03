@@ -70,6 +70,7 @@ services:
         condition: service_healthy
 
     environment:
+      SOURCE_REPO: ${SOURCE_REPO}
       POSTGRES: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PGSSLMODE: disable
 

@@ -19,7 +19,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"net/http"
 )
 
@@ -34,17 +33,15 @@ type Stop struct {
 //go:embed sql/stop_query.sql
 var stopQuerySQL string
 
-func (s *Server) stopQuery(w http.ResponseWriter, r *http.Request) {
+func (s *Server) stopQuery(r *http.Request, _ map[string]string) (any, error) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
-		json.NewEncoder(w).Encode([]Stop{})
-		return
+		return []Stop{}, nil
 	}
 
 	rows, err := s.db.Query(stopQuerySQL, q)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -59,15 +56,13 @@ func (s *Server) stopQuery(w http.ResponseWriter, r *http.Request) {
 			&st.Parent,
 			&st.Platform,
 		); err != nil {
-			http.Error(w, err.Error(), 500)
-			return
+			return nil, err
 		}
 		out = append(out, st)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"source": "https://github.com/friedelschoen/departures",
-		"stops": out,
-	})
+	return out, nil
 }

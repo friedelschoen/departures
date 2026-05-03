@@ -19,7 +19,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"net/http"
 )
 
@@ -40,22 +39,14 @@ type StopInfo struct {
 //go:embed sql/stop_info.sql
 var stopinfoSQL string
 
-func (s *Server) stopinfo(w http.ResponseWriter, r *http.Request) {
-	stopID := r.URL.Query().Get("stop")
-	if stopID == "" {
-		stopID = defaultStopID
-	}
-
-	rows, err := s.db.Query(stopinfoSQL, stopID)
+func (s *Server) stopinfo(r *http.Request, params map[string]string) (any, error) {
+	rows, err := s.db.Query(stopinfoSQL, params["stop"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		w.WriteHeader(http.StatusNotFound)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"error": "stop not found"})
+		return nil, StatusError(http.StatusBadRequest)
 	}
 
 	var stop StopInfo
@@ -72,13 +63,8 @@ func (s *Server) stopinfo(w http.ResponseWriter, r *http.Request) {
 		&stop.PlatformCode,
 		&stop.ZoneID,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"source": "https://github.com/friedelschoen/departures",
-		"stop": stop,
-	})
+	return stop, nil
 }

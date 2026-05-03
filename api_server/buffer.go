@@ -19,7 +19,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"net/http"
 
 	"github.com/dylandreimerink/go-rijksdriehoek"
@@ -28,16 +27,10 @@ import (
 //go:embed sql/buffer.sql
 var bufferSQL string
 
-func (s *Server) stationBuffer(w http.ResponseWriter, r *http.Request) {
-	stopID := r.URL.Query().Get("stop")
-	if stopID == "" {
-		stopID = defaultStopID
-	}
-
-	rows, err := s.db.Query(bufferSQL, stopID)
+func (s *Server) stationBuffer(r *http.Request, params map[string]string) (any, error) {
+	rows, err := s.db.Query(bufferSQL, params["stop"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -61,18 +54,18 @@ func (s *Server) stationBuffer(w http.ResponseWriter, r *http.Request) {
 			&d.ScheduledTime,
 			&d.Terminal,
 			&d.Status,
+			&d.LastSeen,
 			&punctuality,
 			&d.VehicleNumber,
 			&d.BlockCode,
 			&rdx,
 			&rdy,
 		); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
-		d.DelayMinutes = punctuality / 60
-		d.RealtimeTime = d.ScheduledTime + int64(punctuality) // both are seconds
+		d.DelayMinutes = -punctuality / 60
+		d.RealtimeTime = d.ScheduledTime
 
 		if rdx != nil && rdy != nil {
 			d.Lat, d.Lon = rijksdriehoek.RDtoWGS84(float64(*rdx), float64(*rdy))
@@ -82,13 +75,8 @@ func (s *Server) stationBuffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := rows.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"source": "https://github.com/friedelschoen/departures",
-		"departures": out,
-	})
+	return out, nil
 }
