@@ -62,6 +62,7 @@ type Departure struct {
 	Status        *string  `json:"status"`
 	LastSeen      *int64   `json:"last_seen"`
 	Vehicle       *Vehicle `json:"vehicle,omitempty"`
+	Warning       bool     `json:"warning"`
 }
 
 //go:embed sql/departure.sql
@@ -126,6 +127,8 @@ func (s *Server) departures(r *http.Request, params map[string]string) (any, err
 			&veh.BlockCode,
 			&vehRdx,
 			&vehRdy,
+
+			&d.Warning,
 		); err != nil {
 			return nil, err
 		}

@@ -37,8 +37,6 @@ SELECT
 			AT TIME ZONE a.agency_timezone
 	))::bigint AS scheduled_time,
 
-    FALSE, -- terminal
-
 	k.status,
     EXTRACT(EPOCH FROM k.timestamp)::bigint,
     k.punctuality,

@@ -107,7 +107,7 @@ SELECT
 		WHEN vc.stop_sequence = vc.start_sequence 
 		THEN GREATEST(COALESCE(k.punctuality, 0), 0)
 		ELSE COALESCE(k.punctuality, 0)
-	END AS final_punctuality,
+	END,
 
 	k.vehicle_number,
 	k.block_code,
@@ -130,7 +130,21 @@ SELECT
 	COALESCE(vc.punctuality, 0),
 	vc.block_code,
 	vc.rd_x,
-	vc.rd_y
+	vc.rd_y,
+
+    CASE
+	    WHEN
+    		((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone)
+			    BETWEEN now() AND now() + interval '5 minutes'
+		    AND (
+	    		k.vehicle_number IS NULL
+    			OR vc.stop_id IS NULL
+			    OR vc.trip_id IS DISTINCT FROM t.trip_id
+		    )
+            AND st.stop_sequence <> tb.end_sequence
+        THEN true
+    	ELSE false
+    END AS warning
 
 FROM active_feed af
 JOIN gtfs_stop_times st

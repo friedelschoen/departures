@@ -195,3 +195,9 @@ input[type="submit"]:hover {
 .footer a:hover {
 	color: #000;
 }
+
+.alert-high td {
+	background: #fff1f1;
+	color: #8a0000;
+	font-weight: 500;
+}

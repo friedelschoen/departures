@@ -106,6 +106,7 @@ function renderDepartureRow(d, markDelay) {
 	if (d.vehicle && d.vehicle.status) tr.classList.add("has-next");
 	if (d.cancelled) tr.classList.add("cancelled");
 	if (d.terminal) tr.classList.add("terminal");
+    if (d.warning) tr.classList.add("alert-high");
 
 	const scheduleTime = new Date(d.scheduled_time * 1000);
 	const realtimeTime = new Date(d.realtime_time * 1000);
