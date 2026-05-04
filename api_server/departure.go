@@ -25,6 +25,8 @@ import (
 )
 
 type Vehicle struct {
+	Number   *int `json:"number"`
+
 	StopID   *string `json:"stop_id"`
 	StopName *string `json:"stop_name"`
 
@@ -113,6 +115,7 @@ func (s *Server) departures(r *http.Request, params map[string]string) (any, err
 			&rdx,
 			&rdy,
 
+			&veh.Number,
 			&veh.StopID,
 			&veh.StopName,
 			&veh.RouteID,

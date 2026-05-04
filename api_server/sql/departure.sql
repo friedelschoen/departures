@@ -27,8 +27,8 @@ vehicle_context AS (
 		vk.operating_day,
 		vk.data_owner_code,
 		vk.vehicle_number
-	)
-		vk.operating_day,
+	)	
+        vk.operating_day,
 		vk.data_owner_code,
 		vk.vehicle_number,
 
@@ -114,6 +114,7 @@ SELECT
 	k.rd_x,
 	k.rd_y,
 
+	k.vehicle_number,
 	vc.stop_id,
 	vc.stop_name,
 
@@ -186,5 +187,11 @@ WHERE (s.stop_id = $1 OR s.parent_station = $1)
 	  ) BETWEEN now() - $2::INTERVAL
 	        AND now() + $3::INTERVAL
 ORDER BY
-	((cd.date::timestamp + st.departure_time)
-		AT TIME ZONE a.agency_timezone) ASC;
+    ((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone)
+    + (
+        CASE 
+            WHEN vc.stop_sequence = vc.start_sequence 
+            THEN GREATEST(COALESCE(k.punctuality, 0), 0)
+            ELSE COALESCE(k.punctuality, 0)
+        END * interval '1 second'
+    )

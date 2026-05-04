@@ -39,19 +39,19 @@ function delayText(minutes) {
 function statusText(status, stop) {
     switch (status) {
         case "DELAY":
-            return " is delayed";
+            return " delayed";
         case "INIT":
-            return ` is at the starting point <b>${stop}</b>`;
+            return ` at the starting point <b>${stop}</b>`;
         case "ARRIVAL":
-            return ` is arriving at <b>${stop}</b>`;
+            return ` arriving at <b>${stop}</b>`;
         case "ONSTOP":
-            return ` is stopping at <b>${stop}</b>`;
+            return ` stopping at <b>${stop}</b>`;
         case "DEPARTURE":
             return ` passed <b>${stop}</b>`;
         case "ONROUTE":
             return ` near <b>${stop}</b>`;
         case "OFFROUTE":
-            return ` is off route near <b>${stop}</b>`;
+            return ` off route near <b>${stop}</b>`;
         case "END":
             return ` has finished at <b>${stop}</b>`;
         default:
@@ -67,15 +67,14 @@ function vehicleContextText(v) {
 		: "";
     
     const lastseen = (Date.now() / 1000) - v.last_seen;
-	const lastseenText = !v.last_seen ? ''
-        : lastseen < 30 ? " &mdash; just now"
-        : lastseen < 60 ? ` &mdash; ${Math.round(lastseen)}s ago`
-        : ` &mdash; ${Math.round(lastseen / 60)}min ago`;
+	const lastseenText = !v.last_seen || lastseen < 30 ? ''
+        : lastseen < 60 ? ` - last seen ${Math.round(lastseen)}s ago`
+        : ` - last seen ${Math.round(lastseen / 60)}min ago`;
     
     return `
-		<span class="context-label">currently</span>
+        <b>${v.number}</b> - currently
 		<b>${esc(v.line)} ${esc(v.headsign ?? "")}</b>
-		&mdash; ${statusText(v.status, esc(v.stop_name))}</b>
+		- ${statusText(v.status, esc(v.stop_name))}</b>
 		${delay}${lastseenText}
 	`;
 }
@@ -138,9 +137,9 @@ function renderDepartureRow(d, markDelay) {
 		<td class="${d.delay_minutes > 0 && markDelay ? "delay" : ""}">
 			${d.cancelled ? "cancelled" : (vehicle || d.delay_minutes !== 0 ? delay + " min" : "")}
 		</td>
-		<td>${vehicle}</td>
-		<td>${lastseenText}</td>
 	`;
+    if (!markDelay) 
+        tr.innerHTML += `<td>${vehicle}</td>`;
 
 	return tr;
 }
@@ -180,8 +179,8 @@ async function loadDepartures(element, endpoint, insertNow = true, markDelay = t
 	for (const d of deps) {
 		if (!showTerminal && d.terminal) continue;
 
-		const scheduleTime = new Date(d.scheduled_time * 1000);
-		const date = scheduleTime.toLocaleDateString("nl-NL", {
+		const departureTime = new Date(d.realtime_time * 1000);
+		const date = departureTime.toLocaleDateString("nl-NL", {
 			timeZone: "Europe/Amsterdam",
 			day: "2-digit",
 			month: "2-digit",
@@ -193,7 +192,7 @@ async function loadDepartures(element, endpoint, insertNow = true, markDelay = t
 			insertDateRow(rows, date);
 		}
 
-		if (!nowInserted && scheduleTime > now) {
+		if (!nowInserted && departureTime > now) {
 			insertNowRow(rows);
 			nowInserted = true;
 		}
