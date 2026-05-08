@@ -11,4 +11,4 @@ COPY . .
 ENV CGO_ENABLED=1
 RUN go build -v
 
-CMD ["/app/kv6_updater"]
+CMD ["/app/kv6_ingest"]

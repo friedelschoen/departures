@@ -195,56 +195,6 @@ CREATE TABLE IF NOT EXISTS gtfs_trip_bounds (
 		ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS kv6_journey_status (
-	operating_day DATE NOT NULL,
-	data_owner_code VARCHAR(10) NOT NULL, -- enum 1
-	line_planning_number VARCHAR(10) NOT NULL,
-	journey_number INTEGER NOT NULL,
-	reinforcement_number INTEGER NOT NULL DEFAULT 0,
-
-    journey_key TEXT GENERATED ALWAYS AS (
-    	CASE
-	    	WHEN reinforcement_number > 0 THEN
-		    	data_owner_code || ':' ||
-			    line_planning_number || ':' ||
-    			journey_number::TEXT || ':' ||
-	    		reinforcement_number::TEXT
-		    ELSE
-    			data_owner_code || ':' ||
-	    		line_planning_number || ':' ||
-		    	journey_number::TEXT
-	    END
-    ) STORED,
-
-    status VARCHAR(9) NOT NULL, -- DELAY,INIT,ARRIVAL,ONSTOP,DEPARTURE,ONROUTE,OFFROUTE,END
-	
-    timestamp TIMESTAMPTZ NOT NULL,
-	source VARCHAR(7) NOT NULL, -- VEHICLE,SERVER
-
-	user_stop_code VARCHAR(10),
-	passage_sequence_number INTEGER,
-	vehicle_number INTEGER,
-	block_code INTEGER,
-
-    wheelchair_accessible BOOLEAN, -- ACCESSIBLE,NOTACCESSIBLE,UNKNOWN -> true,false,null
-    number_of_coaches INTEGER,
-
-	punctuality INTEGER,
-    
-    rd_x INTEGER,
-	rd_y INTEGER,
-
-    distance_since_last_user_stop INTEGER,
-
-	PRIMARY KEY (
-        operating_day,
-		data_owner_code,
-		line_planning_number,
-		journey_number,
-		reinforcement_number
-	)
-);
-
 CREATE INDEX IF NOT EXISTS idx_gtfs_feeds_active_imported
 	ON gtfs_feeds (imported_at DESC)
 	WHERE active = true;
@@ -254,7 +204,6 @@ CREATE INDEX IF NOT EXISTS idx_gtfs_stops_parent
 
 CREATE INDEX IF NOT EXISTS idx_gtfs_stops_code
 	ON gtfs_stops(feed_ref, stop_code);
-
 
 CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route
 	ON gtfs_trips(feed_ref, route_id);
@@ -269,13 +218,3 @@ CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_active_service_date
 	ON gtfs_calendar_dates(feed_ref, service_id, date)
 	WHERE exception_type = 1;
 
-CREATE INDEX IF NOT EXISTS idx_kv6_status_day_key
-	ON kv6_journey_status(operating_day, journey_key, timestamp DESC);
-
-CREATE INDEX IF NOT EXISTS idx_kv6_status_day_vehicle
-	ON kv6_journey_status(operating_day, data_owner_code, vehicle_number, timestamp DESC)
-	WHERE vehicle_number IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_kv6_current_stop
-	ON kv6_journey_status(user_stop_code, timestamp DESC)
-	WHERE vehicle_number IS NOT NULL;
