@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    shm_size: "1gb"
 
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -18,22 +19,41 @@ services:
       timeout: 5s
       retries: 10
 
+    ports:
+      - "5432:5432"
+
+  staticmaps:
+    image: mxdcodes/docker-staticmaps:latest
+    restart: always
+
+    ports:
+      - "3000:3000"
+
   static_server:
-    image: nginx:alpine
+    build: frontend
+    restart: unless-stopped
+    depends_on:
+      - api_server
+    ports:
+      - "6680:80"
+    volumes:
+      - ./static/gtfs-nl.zip:/usr/share/nginx/html/gtfs-nl.zip
+
+  kv6_ingest:
+    build: kv6_ingest
     restart: unless-stopped
 
     depends_on:
-      - api_server
+      postgres: 
+        condition: service_healthy
 
-    ports:
-      - "6680:80"
-
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./static:/usr/share/nginx/html:ro
-
-  kv6_updater:
-    build: kv6_updater
+    environment:
+      BISON_MQ: ${BISON_MQ}
+      POSTGRES: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PGSSLMODE: disable
+  
+  kv6_projector:
+    build: kv6_projector
     restart: unless-stopped
 
     depends_on:
@@ -43,6 +63,8 @@ services:
     environment:
       POSTGRES: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PGSSLMODE: disable
+
+
 
   gtfs_updater:
     build: gtfs_updater
@@ -59,7 +81,6 @@ services:
       GTFS_URL: ${GTFS_URL}
 
       PGSSLMODE: disable
-      #GTFS_URL: https://gtfs.openov.nl/gtfs-rt/gtfs-openov-nl.zip
 
   api_server:
     build: api_server

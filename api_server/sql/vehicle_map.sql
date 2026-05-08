@@ -16,21 +16,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 SELECT
-	s.stop_id,
-	s.stop_code,
-	s.stop_name,
-	s.stop_lat,
-	s.stop_lon,
-	s.location_type,
-	s.parent_station,
-	s.stop_timezone,
-	s.wheelchair_boarding,
-	s.platform_code,
-	s.zone_id
-FROM active_gtfs_stops s
-WHERE s.stop_id = $1
-   OR s.parent_station = $1
-ORDER BY
-	(s.stop_id = $1) DESC,
-	s.stop_name,
-	s.platform_code;
+	operating_day,
+	data_owner_code,
+	vehicle_number,
+	realtime_trip_id,
+	status,
+	event_timestamp,
+	rd_x,
+	rd_y
+FROM kv6_current_vehicle
+WHERE data_owner_code = $1
+  AND vehicle_number = $2
+ORDER BY operating_day DESC, event_timestamp DESC
+LIMIT 1;

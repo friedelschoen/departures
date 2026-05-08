@@ -1,3 +1,20 @@
+/*
+Copyright (C) 2026 Friedel Schön
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package main
 
 import (
@@ -15,19 +32,118 @@ func (err StatusError) Error() string {
 	return http.StatusText(int(err))
 }
 
+type APIHandlerFunc func(s Server, w http.ResponseWriter, req *http.Request, placeholders map[string]string)
+
 type APIHandler struct {
 	Methods []string
 	URL     string
-	Handler func(req *http.Request, placeholders map[string]string) (any, error)
+	Handler APIHandlerFunc
+}
+
+type Response struct {
+	SourceRepo string `json:"source_repo"`
+	Status     int    `json:"status"`
+	Result     any    `json:"result,omitempty"`
+}
+
+func writeResponse(w http.ResponseWriter, result any, status int) {
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	response := Response{
+		SourceRepo: os.Getenv("SOURCE_REPO"),
+		Status:     status,
+		Result:     result,
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "\t")
+	if err := enc.Encode(response); err != nil {
+		log.Println("unable to encode JSON: ", err)
+	}
+}
+
+type SQLArgumentFunc func(req *http.Request, params map[string]string) ([]any, error)
+
+func getSQLResult(s Server, req *http.Request, placeholders map[string]string, query string, single bool, args SQLArgumentFunc) (any, error) {
+	var ar []any
+	if args != nil {
+		var err error
+		ar, err = args(req, placeholders)
+		if err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.db.Query(query, ar...)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer rows.Close()
+
+	names, err := rows.Columns()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	row := make([]any, len(names))
+	for i := range row {
+		row[i] = new(any)
+	}
+	out := []map[string]any{}
+	for rows.Next() {
+		if err := rows.Scan(row...); err != nil {
+			log.Fatalln(err)
+		}
+		dest := make(map[string]any, len(names))
+		for i, key := range names {
+			dest[key] = row[i]
+		}
+		out = append(out, dest)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if single {
+		if len(out) == 0 {
+			return nil, StatusError(http.StatusNotFound)
+		}
+		return out[0], nil
+	}
+	return out, nil
+}
+
+func SQLHandler(query string, single bool, args SQLArgumentFunc) APIHandlerFunc {
+	return func(s Server, w http.ResponseWriter, req *http.Request, placeholders map[string]string) {
+		result, err := getSQLResult(s, req, placeholders, query, single, args)
+
+		var status int
+		switch err := err.(type) {
+		case StatusError:
+			status = int(err)
+		case nil:
+			status = http.StatusOK
+		default:
+			status = http.StatusInternalServerError
+			log.Printf("error while handling %s %v: %v\n", req.Method, req.URL, err)
+		}
+		writeResponse(w, result, status)
+	}
+}
+
+type APIHandleMux []APIHandler
+
+type Handler struct {
+	Server Server
+	Mux    APIHandleMux
 }
 
 func (h APIHandler) Match(method string, target string) (map[string]string, bool) {
 	if len(h.Methods) > 0 && !slices.Contains(h.Methods, method) {
 		return nil, false
 	}
+
 	targetS := strings.Split(strings.Trim(target, "/"), "/")
 	matchS := strings.Split(strings.Trim(h.URL, "/"), "/")
-
 	if len(targetS) != len(matchS) {
 		return nil, false
 	}
@@ -43,49 +159,16 @@ func (h APIHandler) Match(method string, target string) (map[string]string, bool
 			return nil, false
 		}
 	}
+
 	return placeholders, true
 }
-
-type Response struct {
-	SourceRepo string `json:"source_repo"`
-	Status     int    `json:"status"`
-	Result     any    `json:"result,omitempty"`
-}
-
-type APIHandleMux []APIHandler
-
-func writeResponse(w http.ResponseWriter, result any, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	var response Response
-	response.SourceRepo = os.Getenv("SOURCE_REPO")
-	response.Status = status
-	response.Result = result
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "\t")
-	if err := enc.Encode(response); err != nil {
-		log.Println("unable to encode JSON: ", err)
-	}
-}
-
-func (mux APIHandleMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	for _, h := range mux {
-		if pl, ok := h.Match(req.Method, req.URL.Path); ok {
-			res, err := h.Handler(req, pl)
-
-			var status int
-			switch err := err.(type) {
-			case StatusError:
-				status = int(err)
-			case nil:
-				status = http.StatusOK
-			default:
-				status = http.StatusInternalServerError
-				log.Printf("error while handling %s %v: %v\n", req.Method, req.URL, err)
-			}
-			writeResponse(w, res, status)
+func (h Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	for _, route := range h.Mux {
+		if pl, ok := route.Match(req.Method, req.URL.Path); ok {
+			route.Handler(h.Server, w, req, pl)
 			return
 		}
 	}
+
 	writeResponse(w, nil, http.StatusNotFound)
 }

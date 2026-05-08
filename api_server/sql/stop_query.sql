@@ -15,21 +15,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-WITH active_feed AS (
-	SELECT id
-	FROM gtfs_feeds
-	WHERE active = true
-	ORDER BY imported_at DESC
-	LIMIT 1
-)
 SELECT
 	stop_id,
 	stop_code,
 	stop_name,
 	parent_station,
 	platform_code
-FROM gtfs_stops s
-JOIN active_feed af ON af.id = s.feed_ref
+FROM active_gtfs_stops s
 WHERE
 	lower(stop_name) LIKE '%' || lower($1) || '%'
 	OR lower(stop_code) = lower($1)

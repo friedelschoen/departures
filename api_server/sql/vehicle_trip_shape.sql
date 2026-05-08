@@ -16,21 +16,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 SELECT
-	s.stop_id,
-	s.stop_code,
-	s.stop_name,
-	s.stop_lat,
-	s.stop_lon,
-	s.location_type,
-	s.parent_station,
-	s.stop_timezone,
-	s.wheelchair_boarding,
-	s.platform_code,
-	s.zone_id
-FROM active_gtfs_stops s
-WHERE s.stop_id = $1
-   OR s.parent_station = $1
-ORDER BY
-	(s.stop_id = $1) DESC,
-	s.stop_name,
-	s.platform_code;
+	sh.shape_pt_lat,
+	sh.shape_pt_lon,
+	sh.shape_pt_sequence
+FROM active_gtfs_trips t
+JOIN active_gtfs_shapes sh
+	ON sh.shape_id = t.shape_id
+WHERE t.realtime_trip_id = $1
+  AND t.realtime_trip_sequence = 1
+ORDER BY sh.shape_pt_sequence;

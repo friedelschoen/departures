@@ -50,18 +50,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s := &Server{db: db}
-
-	mux := APIHandleMux{
-		{[]string{"GET"}, "/api/departures/:stop", s.departures},
-		{[]string{"GET"}, "/api/buffer/:stop", s.stationBuffer},
-		{[]string{"GET"}, "/api/stop/:stop", s.stopinfo},
-		{[]string{"GET"}, "/api/stop_query", s.stopQuery},
-	}
+	s := Server{db: db}
+	handler := Handler{s, mux}
 
 	srv := &http.Server{
 		Addr:         ":8080",
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
