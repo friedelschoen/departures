@@ -28,9 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -125,244 +123,6 @@ func activateFeed(tx *sql.Tx, feedRef int64) error {
 	return err
 }
 
-func importAgency(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_agency (
-				feed_ref,
-				agency_id,
-				agency_name,
-				agency_url,
-				agency_timezone,
-				agency_phone
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "agency.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["agency_id"],
-			row["agency_name"],
-			nullString(row["agency_url"]),
-			nullString(row["agency_timezone"]),
-			nullString(row["agency_phone"]),
-		}
-	})
-}
-
-func importCalendarDates(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_calendar_dates (
-				feed_ref,
-				service_id,
-				date,
-				exception_type
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "calendar_dates.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["service_id"],
-			parseGTFSDate(row["date"]),
-			parseInt(row["exception_type"]),
-		}
-	})
-}
-
-func importRoutes(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_routes (
-				feed_ref,
-				route_id,
-				agency_id,
-				route_short_name,
-				route_long_name,
-				route_desc,
-				route_type,
-				route_color,
-				route_text_color,
-				route_url
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "routes.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["route_id"],
-			nullString(row["agency_id"]),
-			nullString(row["route_short_name"]),
-			nullString(row["route_long_name"]),
-			nullString(row["route_desc"]),
-			parseNullableInt(row["route_type"]),
-			nullString(row["route_color"]),
-			nullString(row["route_text_color"]),
-			nullString(row["route_url"]),
-		}
-	})
-}
-
-func importShapes(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_shapes (
-				feed_ref,
-				shape_id,
-				shape_pt_sequence,
-				shape_pt_lat,
-				shape_pt_lon,
-				shape_dist_traveled
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "shapes.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["shape_id"],
-			parseInt(row["shape_pt_sequence"]),
-			parseFloat(row["shape_pt_lat"]),
-			parseFloat(row["shape_pt_lon"]),
-			parseNullableFloat(row["shape_dist_traveled"]),
-		}
-	})
-}
-
-func importStops(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_stops (
-				feed_ref,
-				stop_id,
-				stop_code,
-				stop_name,
-				stop_lat,
-				stop_lon,
-				location_type,
-				parent_station,
-				stop_timezone,
-				wheelchair_boarding,
-				platform_code,
-				zone_id
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "stops.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["stop_id"],
-			nullString(row["stop_code"]),
-			nullString(row["stop_name"]),
-			parseNullableFloat(row["stop_lat"]),
-			parseNullableFloat(row["stop_lon"]),
-			parseNullableInt(row["location_type"]),
-			nullString(row["parent_station"]),
-			nullString(row["stop_timezone"]),
-			parseNullableInt(row["wheelchair_boarding"]),
-			nullString(row["platform_code"]),
-			nullString(row["zone_id"]),
-		}
-	})
-}
-
-func importTrips(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_trips (
-				feed_ref,
-				route_id,
-				service_id,
-				trip_id,
-				realtime_trip_id,
-				trip_headsign,
-				trip_short_name,
-				trip_long_name,
-				direction_id,
-				block_id,
-				shape_id,
-				wheelchair_accessible,
-				bikes_allowed
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "trips.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["route_id"],
-			row["service_id"],
-			row["trip_id"],
-			nullString(row["realtime_trip_id"]),
-			nullString(row["trip_headsign"]),
-			nullString(row["trip_short_name"]),
-			nullString(row["trip_long_name"]),
-			parseNullableInt(row["direction_id"]),
-			nullString(row["block_id"]),
-			nullString(row["shape_id"]),
-			parseNullableInt(row["wheelchair_accessible"]),
-			parseNullableInt(row["bikes_allowed"]),
-		}
-	})
-}
-
-func importStopTimes(tx *sql.Tx, feedRef int64, a string) error {
-	stmt, err := tx.Prepare(`
-			COPY gtfs_stop_times (
-				feed_ref,
-				trip_id,
-				stop_sequence,
-				stop_id,
-				stop_headsign,
-				arrival_time,
-				departure_time,
-				pickup_type,
-				drop_off_type,
-				timepoint,
-				shape_dist_traveled,
-				fare_units_traveled
-			) FROM STDIN
-		`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	return insertCSV(stmt, a, "stop_times.txt", func(row map[string]string) []any {
-		return []any{
-			feedRef,
-			row["trip_id"],
-			parseInt(row["stop_sequence"]),
-			row["stop_id"],
-			nullString(row["stop_headsign"]),
-			nullString(row["arrival_time"]),
-			nullString(row["departure_time"]),
-			parseNullableInt(row["pickup_type"]),
-			parseNullableInt(row["drop_off_type"]),
-			parseNullableInt(row["timepoint"]),
-			parseNullableFloat(row["shape_dist_traveled"]),
-			parseNullableInt(row["fare_units_traveled"]),
-		}
-	})
-}
-
 func readFirstRow(rc io.Reader) (map[string]string, error) {
 	r := csv.NewReader(rc)
 	r.FieldsPerRecord = -1
@@ -386,7 +146,7 @@ func readFirstRow(rc io.Reader) (map[string]string, error) {
 	return result, nil
 }
 
-func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[string]string) []any) error {
+func iterCSV(tmpdir string, filename string, fn func(map[string]string) error) error {
 	log.Println("open ", filename)
 	rc, err := os.Open(filepath.Join(tmpdir, filename))
 	if err != nil {
@@ -407,6 +167,8 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 		return err
 	}
 
+	var total int
+
 	var prevOff int64
 	row := make(map[string]string, len(header))
 	for {
@@ -417,6 +179,7 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 		if err != nil {
 			return err
 		}
+		total++
 
 		off := r.InputOffset()
 		if off-prevOff > 1000000 {
@@ -434,13 +197,36 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 			}
 		}
 
-		insert := fn(row)
-		if _, err := stmt.Exec(insert...); err != nil {
+		if err := fn(row); err != nil {
 			return err
 		}
 	}
+	log.Printf("done %s - %dMB\n", filename, totalSize/1000000)
+	return err
+}
+
+func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[string]string) []any, cleanup func() [][]any) error {
+	var total, skipped int
+
+	err := iterCSV(tmpdir, filename, func(row map[string]string) error {
+		total++
+		insert := fn(row)
+		if len(insert) == 0 {
+			skipped++
+			return nil
+		}
+		_, err := stmt.Exec(insert...)
+		return err
+	})
+	if cleanup != nil {
+		for _, insert := range cleanup() {
+			if _, err := stmt.Exec(insert...); err != nil {
+				return err
+			}
+		}
+	}
 	_, err = stmt.Exec()
-	log.Printf("%s - 100.0%% - %dMB / %dMB\n", filename, totalSize/1000000, totalSize/1000000)
+	log.Printf("%d of %d skipped (%.1f)\n", skipped, total, 100*float64(skipped)/float64(total))
 	return err
 }
 
@@ -494,102 +280,13 @@ func parseNullableFloat(s string) any {
 }
 
 func nullString(s string) any {
-	if strings.TrimSpace(s) == "" {
+	if s == "" {
 		return nil
 	}
 	return s
 }
 
-func calculateTripBounds(tx *sql.Tx, feedRef int64) error {
-	if _, err := tx.Exec(`SET LOCAL work_mem = '1GB'`); err != nil {
-		return err
-	}
-
-	log.Println("Clearing trip_bounds...")
-	if _, err := tx.Exec(`
-	DELETE FROM gtfs_trip_bounds
-	WHERE feed_ref = $1;
-	`, feedRef); err != nil {
-		return err
-	}
-
-	log.Println("Filling trip_bounds...")
-	if _, err := tx.Exec(`
-WITH bounds AS (
-	SELECT
-		feed_ref,
-		trip_id,
-		min(stop_sequence) AS start_sequence,
-		max(stop_sequence) AS end_sequence
-	FROM gtfs_stop_times
-	WHERE feed_ref = $1
-	GROUP BY feed_ref, trip_id
-)
-INSERT INTO gtfs_trip_bounds (
-	feed_ref,
-	trip_id,
-	start_time,
-	end_time,
-	start_sequence,
-	end_sequence,
-	start_stop,
-	end_stop
-)
-SELECT
-	b.feed_ref,
-	b.trip_id,
-	COALESCE(start_st.departure_time, start_st.arrival_time) AS start_time,
-	COALESCE(end_st.arrival_time, end_st.departure_time) AS end_time,
-	b.start_sequence,
-	b.end_sequence,
-	start_st.stop_id AS start_stop,
-	end_st.stop_id AS end_stop
-FROM bounds b
-JOIN gtfs_stop_times start_st
-	ON start_st.feed_ref = b.feed_ref
-   AND start_st.trip_id = b.trip_id
-   AND start_st.stop_sequence = b.start_sequence
-JOIN gtfs_stop_times end_st
-	ON end_st.feed_ref = b.feed_ref
-   AND end_st.trip_id = b.trip_id
-   AND end_st.stop_sequence = b.end_sequence;`, feedRef); err != nil {
-		return err
-	}
-
-	log.Println("Filling realtime_trip_sequence...")
-	if _, err := tx.Exec(`
-WITH seq AS (
-	SELECT
-		feed_ref,
-		trip_id,
-		row_number() OVER (
-			PARTITION BY feed_ref, service_id, realtime_trip_id
-			ORDER BY trip_id
-		) AS n
-	FROM gtfs_trips
-	WHERE feed_ref = $1
-	  AND realtime_trip_id IS NOT NULL
-)
-UPDATE gtfs_trips t
-SET realtime_trip_sequence = seq.n
-FROM seq
-WHERE t.feed_ref = seq.feed_ref
-  AND t.trip_id = seq.trip_id;
- `, feedRef); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-var gtfsFiles = []string{"agency.txt", "feed_info.txt", "shapes.txt", "stops.txt", "trips.txt",
-	"calendar_dates.txt", "routes.txt", "stop_times.txt", "transfers.txt"}
-
 func unpackFile(dest string, f *zip.File) error {
-	if !slices.Contains(gtfsFiles, f.Name) {
-		return nil
-	}
-
 	instream, err := f.Open()
 	if err != nil {
 		return err
@@ -622,6 +319,63 @@ func unpack(dest string, buf []byte) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func importTables(tx *sql.Tx, feedRef int64, zr string) error {
+	log.Printf("collecting...\n")
+
+	routes, agencies, err := collectRoutes(zr)
+	if err != nil {
+		return err
+	}
+
+	trips, services, shapes, err := collectTrips(zr, routes)
+	if err != nil {
+		return err
+	}
+
+	stops, err := collectStopTimes(zr, trips)
+	if err != nil {
+		return err
+	}
+
+	err = collectStops(zr, stops)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("importing new feed_ref=%d...\n", feedRef)
+
+	err = importAgency(tx, feedRef, zr, agencies)
+	if err != nil {
+		return err
+	}
+	err = importRoutes(tx, feedRef, zr)
+	if err != nil {
+		return err
+	}
+	err = importTrips(tx, feedRef, zr, routes)
+	if err != nil {
+		return err
+	}
+	err = importCalendarDates(tx, feedRef, zr, services)
+	if err != nil {
+		return err
+	}
+	err = importStops(tx, feedRef, zr, stops)
+	if err != nil {
+		return err
+	}
+	err = importStopTimes(tx, feedRef, zr, trips)
+	if err != nil {
+		return err
+	}
+	err = importShapes(tx, feedRef, zr, shapes)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -683,37 +437,6 @@ func importData(db *sql.DB, gtfsURL string) (int64, error) {
 		return 0, os.ErrExist
 	}
 
-	log.Printf("importing new feed_ref=%d\n", feedRef)
-
-	err = importAgency(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-	err = importCalendarDates(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-	err = importRoutes(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-	// err = importShapes(tx, feedRef, zr)
-	// if err != nil {
-	// 	return err
-	// }
-	err = importStops(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-	err = importTrips(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-	err = importStopTimes(tx, feedRef, zr)
-	if err != nil {
-		return 0, err
-	}
-
 	if err := activateFeed(tx, feedRef); err != nil {
 		return 0, err
 	}
@@ -726,18 +449,8 @@ func importData(db *sql.DB, gtfsURL string) (int64, error) {
 
 	// insert done!
 
-	tx, err = db.Begin()
+	err = runPostImporters(db, feedRef)
 	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-
-	err = calculateTripBounds(tx, feedRef)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 
