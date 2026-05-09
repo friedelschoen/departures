@@ -39,7 +39,11 @@ SELECT
 	k.status,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
 
-	COALESCE(k.punctuality, 0) AS punctuality,
+	CASE 
+		WHEN e.stop_sequence = tb.start_sequence
+		THEN GREATEST(COALESCE(k.punctuality, 0), 0)
+		ELSE COALESCE(k.punctuality, 0)
+	END as punctuality,
 
 	k.vehicle_number,
 	k.block_code,
@@ -65,6 +69,8 @@ JOIN active_gtfs_stops s
    )
 JOIN active_gtfs_trips t
     ON t.trip_id = e.trip_id
+JOIN active_gtfs_trip_bounds tb
+    ON tb.trip_id = e.trip_id
 JOIN active_gtfs_routes r
     ON r.route_id = e.route_id
 LEFT JOIN kv6_current_trip k
@@ -78,6 +84,9 @@ WHERE e.mode = $1::gtfs_stop_event_mode
 ORDER BY
 	e.scheduled_time
 		+ (
-			COALESCE(k.punctuality, 0)
-			* interval '1 second'
+		CASE 
+	    	WHEN e.terminal
+		    THEN GREATEST(COALESCE(k.punctuality, 0), 0)
+		    ELSE COALESCE(k.punctuality, 0)
+	    END * interval '1 second'
 		);
