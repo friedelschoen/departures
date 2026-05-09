@@ -16,36 +16,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 SELECT
-	t.trip_id,
-	t.realtime_trip_id,
-	t.trip_headsign,
-	t.trip_short_name,
-	t.direction_id,
-	t.block_id,
-
-	r.route_id,
-	r.route_short_name,
-	r.route_color,
-	r.route_text_color,
-
-	tb.start_time,
-	tb.end_time,
-	tb.start_stop,
-	tb.end_stop,
-
-	k.status,
-	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
 	k.vehicle_number,
-    k.data_owner_code,
-	k.block_code,
-	k.punctuality,
+	k.status,
 	k.rd_x,
 	k.rd_y
 FROM active_gtfs_trips t
-JOIN active_gtfs_routes r
-    ON r.route_id = t.route_id
-LEFT JOIN active_gtfs_trip_bounds tb
-    ON tb.trip_id = t.trip_id
-LEFT JOIN kv6_current_trip k
+JOIN kv6_current_trip k
 	ON k.realtime_trip_id = t.realtime_trip_id
-WHERE t.trip_id = $1;
+WHERE t.trip_id = $1
+  AND k.status <> 'END'
+  AND k.rd_x IS NOT NULL
+  AND k.rd_y IS NOT NULL
+ORDER BY k.event_timestamp DESC
+LIMIT 1;

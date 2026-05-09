@@ -90,6 +90,13 @@ func scanTripShape(rows *sql.Rows) ([]MapPoint, error) {
 	return out, rows.Err()
 }
 
+type TripVehicleRow struct {
+	VehicleNumber int
+	Status        string
+	RdX           int
+	RdY           int
+}
+
 func TripMapHandler(s Server, w http.ResponseWriter, req *http.Request, params map[string]string) {
 	rows, err := s.db.Query(tripMapSQL, params["trip_id"])
 	if err != nil {
@@ -109,7 +116,31 @@ func TripMapHandler(s Server, w http.ResponseWriter, req *http.Request, params m
 		return
 	}
 
-	writeMapPNG(w, 0, nil, shape)
+	var marker *s2.LatLng
+
+	var v TripVehicleRow
+	err = s.db.QueryRow(tripVehicleSQL, params["trip_id"]).Scan(
+		&v.VehicleNumber,
+		&v.Status,
+		&v.RdX,
+		&v.RdY,
+	)
+	if err != nil && err != sql.ErrNoRows {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err == nil {
+		lat, lon := rijksdriehoek.RDtoWGS84(float64(v.RdX), float64(v.RdY))
+		m := s2.LatLngFromDegrees(lat, lon)
+		marker = &m
+	}
+
+	if err := writeMapPNG(w, 0, marker, shape); err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 type VehicleMapRow struct {

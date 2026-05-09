@@ -18,6 +18,10 @@
 	let openTripStops = [];
 	let openTripLoading = false;
 
+    let openVehicle = null;
+    let openVehicleInfo = null;
+    let openVehicleLoading = false;
+
 	function result(json) {
 		return json?.result ?? null;
 	}
@@ -182,6 +186,31 @@
 			openTripLoading = false;
 		}
 	}
+
+    async function openVehicleCard(vehicle) {
+        const dataOwner = vehicle.data_owner_code;
+        const vehicleNumber = vehicle.vehicle_number;
+        const key = `${dataOwner}/${vehicleNumber}`;
+
+        if (openVehicle === key) {
+            openVehicle = null;
+            openVehicleInfo = null;
+            return;
+        }
+
+        openVehicle = key;
+        openVehicleInfo = null;
+        openVehicleLoading = true;
+
+        try {
+            const data = await fetchJSON(
+                `/api/vehicle/${encodeURIComponent(dataOwner)}/${encodeURIComponent(vehicleNumber)}`
+            );
+            openVehicleInfo = asList(data)[0] ?? null;
+        } finally {
+            openVehicleLoading = false;
+        }
+    }
 
 	async function searchStops() {
 		const q = stop.trim();
@@ -351,6 +380,7 @@ function stopRowClass(st) {
 <table>
 	<thead>
 		<tr>
+            <th></th>
 			<th style="width:20px;"></th>
 			<th style="width:20px;"></th>
     		<th>Destination</th>
@@ -361,7 +391,15 @@ function stopRowClass(st) {
 	</thead>
 	<tbody>
 		{#each vehicles as v}
-			<tr class="departure-row">
+            {@const key = `${v.data_owner_code}/${v.vehicle_number}`}
+            {@const open = openVehicle === key}
+            <tr
+                class:departure-row={true}
+                class:has-next={true}
+                class:open
+                on:click={() => openVehicleCard(v)}
+            >
+                <td class="toggle-cell">{open ? "▾" : "▸"}</td>
 				<td style="text-align: center;">{v.platform_code ?? ""}</td>
 				<td style={lineStyle(v)}>{v.route_short_name ?? ""}</td>
 				<td>{v.trip_headsign ?? ""}</td>
@@ -375,6 +413,54 @@ function stopRowClass(st) {
 					{/if}
 				</td>
 			</tr>
+            {#if open}
+                <tr class="trip-card-row">
+                    <td colspan="7">
+                        <div class="trip-card">
+                            {#if openVehicleLoading}
+                                Loading vehicle...
+                            {:else if openVehicleInfo}
+                                <div class="trip-card-header">
+                                    <div>
+                                        <b>Vehicle {openVehicleInfo.vehicle_number}</b>
+                                        {#if openVehicleInfo.route_short_name}
+                                            — line {openVehicleInfo.route_short_name}
+                                        {/if}
+                                        <div class="muted">
+                                            {#if openVehicleInfo.trip_headsign}
+                                                {openVehicleInfo.trip_headsign}
+                                            {/if}
+                                            {#if openVehicleInfo.realtime_trip_id}
+                                                — realtime trip {openVehicleInfo.realtime_trip_id}
+                                            {/if}
+                                            {#if openVehicleInfo.block_code}
+                                                — block {openVehicleInfo.block_code}
+                                            {/if}
+                                            {#if openVehicleInfo.status}
+                                                — {statusText(openVehicleInfo.status)}
+                                            {/if}
+                                        </div>
+                                    </div>
+                                    <div class="trip-card-links">
+                                        <a target="_blank" href={vehicleMapURL(openVehicleInfo)}>vehicle map</a>
+                                        {#if openVehicleInfo.trip_id}
+                                            <a target="_blank" href={tripMapURL(openVehicleInfo.trip_id)}>trip map</a>
+                                        {/if}
+                                    </div>
+                                </div>
+
+                                <img
+                                    class="trip-map"
+                                    src={vehicleMapURL(openVehicleInfo)}
+                                    alt="Vehicle map"
+                                >
+                            {:else}
+                                No vehicle data found.
+                            {/if}
+                        </div>
+                    </td>
+                </tr>
+            {/if}
 		{/each}
 	</tbody>
 </table>

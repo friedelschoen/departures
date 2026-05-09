@@ -55,6 +55,9 @@ var vehicleInfoSQL string
 //go:embed sql/vehicle_map.sql
 var vehicleMapSQL string
 
+//go:embed sql/trip_vehicle.sql
+var tripVehicleSQL string
+
 func intervalParam(req *http.Request, name string, def string) string {
 	v := req.URL.Query().Get(name)
 	switch v {
