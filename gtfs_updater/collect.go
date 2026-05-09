@@ -17,18 +17,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
-func collectRoutes(a string) (routes, agencies map[string]struct{}, _ error) {
+func collectRoutes(a string, agencies map[string]struct{}) (routes map[string]struct{}, _ error) {
 	routes = make(map[string]struct{})
-	agencies = make(map[string]struct{})
-	return routes, agencies, iterCSV(a, "routes.txt", func(row map[string]string) error {
-		routeType := parseInt(row["route_type"])
-		if routeType != 3 {
+	return routes, iterCSV(a, "routes.txt", func(row map[string]string) error {
+		agencyID := row["agency_id"]
+		if _, ok := agencies[agencyID]; !ok {
 			return nil
 		}
 		routeID := row["route_id"]
 		routes[routeID] = struct{}{}
-		agencyID := row["agency_id"]
-		agencies[agencyID] = struct{}{}
 		return nil
 	})
 }

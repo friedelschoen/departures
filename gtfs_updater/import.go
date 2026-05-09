@@ -79,7 +79,7 @@ func importCalendarDates(tx *sql.Tx, feedRef int64, a string, services map[strin
 	}, nil)
 }
 
-func importRoutes(tx *sql.Tx, feedRef int64, a string) error {
+func importRoutes(tx *sql.Tx, feedRef int64, a string, routes map[string]struct{}) error {
 	stmt, err := tx.Prepare(`
 			COPY gtfs_routes (
 				feed_ref,
@@ -100,19 +100,19 @@ func importRoutes(tx *sql.Tx, feedRef int64, a string) error {
 	defer stmt.Close()
 
 	return insertCSV(stmt, a, "routes.txt", func(row map[string]string) []any {
-		routeType := parseInt(row["route_type"])
-		if routeType != 3 {
+		routeID := row["route_id"]
+		if _, ok := routes[routeID]; !ok {
 			return nil
 		}
 
 		return []any{
 			feedRef,
-			row["route_id"],
+			routeID,
 			row["agency_id"],
 			nullString(row["route_short_name"]),
 			nullString(row["route_long_name"]),
 			nullString(row["route_desc"]),
-			routeType,
+			nullString(row["route_type"]),
 			nullString(row["route_color"]),
 			nullString(row["route_text_color"]),
 			nullString(row["route_url"]),

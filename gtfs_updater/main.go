@@ -36,6 +36,10 @@ import (
 
 const staleAfter = 12 * time.Hour
 
+var agencies = map[string]struct{}{
+	"QBUZZ": {},
+}
+
 func activeFeedIsStale(db *sql.DB) (bool, error) {
 	var importedAt time.Time
 
@@ -226,7 +230,7 @@ func insertCSV(stmt *sql.Stmt, tmpdir string, filename string, fn func(map[strin
 		}
 	}
 	_, err = stmt.Exec()
-	log.Printf("%d of %d skipped (%.1f)\n", skipped, total, 100*float64(skipped)/float64(total))
+	log.Printf("%d of %d skipped (%.1f%%)\n", skipped, total, 100*float64(skipped)/float64(total))
 	return err
 }
 
@@ -325,7 +329,7 @@ func unpack(dest string, buf []byte) error {
 func importTables(tx *sql.Tx, feedRef int64, zr string) error {
 	log.Printf("collecting...\n")
 
-	routes, agencies, err := collectRoutes(zr)
+	routes, err := collectRoutes(zr, agencies)
 	if err != nil {
 		return err
 	}
@@ -351,7 +355,7 @@ func importTables(tx *sql.Tx, feedRef int64, zr string) error {
 	if err != nil {
 		return err
 	}
-	err = importRoutes(tx, feedRef, zr)
+	err = importRoutes(tx, feedRef, zr, routes)
 	if err != nil {
 		return err
 	}
