@@ -21,8 +21,8 @@ SELECT
 	s.stop_code,
 	s.stop_name,
 	s.platform_code,
-	st.arrival_time,
-	st.departure_time,
+    (cd.date + st.arrival_time) AT TIME ZONE a.agency_timezone as arrival_time,
+    (cd.date + st.departure_time) AT TIME ZONE a.agency_timezone as departure_time,
 
 	k.status,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
@@ -34,6 +34,18 @@ JOIN active_gtfs_stop_times st
     ON st.trip_id = t.trip_id
 JOIN active_gtfs_stops s
     ON s.stop_id = st.stop_id
+JOIN active_gtfs_routes r 
+    ON r.route_id = t.route_id
+JOIN active_gtfs_agency a 
+    ON a.agency_id = r.agency_id
+JOIN active_gtfs_calendar_dates cd
+    ON cd.service_id = t.service_id 
+    AND cd.service_id = t.service_id
+   AND cd.exception_type = 1
+   AND cd.date BETWEEN
+		((now() AT TIME ZONE a.agency_timezone)::date - 1)
+		AND
+		((now() AT TIME ZONE a.agency_timezone)::date + 1) 
 LEFT JOIN kv6_trip_stop_status k
 	ON k.operating_day = current_date
    AND k.realtime_trip_id = t.realtime_trip_id

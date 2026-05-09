@@ -86,17 +86,23 @@ func getSQLResult(s Server, req *http.Request, placeholders map[string]string, q
 		log.Fatalln(err)
 	}
 	row := make([]any, len(names))
-	for i := range row {
-		row[i] = new(any)
-	}
 	out := []map[string]any{}
 	for rows.Next() {
+		for i := range row {
+			row[i] = new(any)
+		}
 		if err := rows.Scan(row...); err != nil {
 			log.Fatalln(err)
 		}
 		dest := make(map[string]any, len(names))
 		for i, key := range names {
-			dest[key] = row[i]
+			v := row[i]
+			switch x := v.(type) {
+			case []byte:
+				dest[key] = string(x)
+			default:
+				dest[key] = x
+			}
 		}
 		out = append(out, dest)
 	}

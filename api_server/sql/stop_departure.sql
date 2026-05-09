@@ -15,13 +15,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-WITH stop_scope AS (
-	SELECT s.*
-	FROM active_gtfs_stops s
-	WHERE s.stop_id = $1
-	   OR s.parent_station = $1
-)
-SELECT
+SELECT DISTINCT ON (k.last_event_id)
 	r.route_id,
 	r.route_short_name,
 	r.route_color,
@@ -32,7 +26,7 @@ SELECT
 	s.platform_code,
 
 	EXTRACT(EPOCH FROM (
-		(cd.date::timestamp + st.departure_time)
+		(cd.date::timestamp + CASE WHEN $1 = 'departure' THEN st.departure_time ELSE st.arrival_time END)
 			AT TIME ZONE a.agency_timezone
 	))::bigint AS scheduled_time,
 
@@ -56,8 +50,9 @@ SELECT
 		ELSE false
 	END AS warning
 FROM active_gtfs_stop_times st
-JOIN stop_scope s
+JOIN active_gtfs_stops s
     ON s.stop_id = st.stop_id
+   AND (s.stop_id = $2 OR s.parent_station = $2)
 JOIN active_gtfs_trips t
     ON t.trip_id = st.trip_id
 JOIN active_gtfs_routes r
@@ -72,15 +67,15 @@ JOIN active_gtfs_calendar_dates cd
 		AND
 		((now() AT TIME ZONE a.agency_timezone)::date + 1)
 JOIN active_gtfs_trip_bounds tb
-   AND tb.trip_id = st.trip_id
-LEFT JOIN kv6_current_trip k
+    ON tb.trip_id = st.trip_id
+JOIN kv6_current_trip k
 	ON k.operating_day = cd.date
    AND k.realtime_trip_id = t.realtime_trip_id
 WHERE (
 	(cd.date::timestamp + st.departure_time)
 		AT TIME ZONE a.agency_timezone
-) BETWEEN now() - $2::interval
-    AND now() + $3::interval
-ORDER BY
+) BETWEEN now() - $3::interval
+    AND now() + $4::interval
+ORDER BY k.last_event_id,
 	((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone)
 	+ (COALESCE(k.punctuality, 0) * interval '1 second');

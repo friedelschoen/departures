@@ -16,10 +16,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 WITH stop_scope AS (
-	SELECT s.*
+	SELECT
+		s.feed_ref,
+		s.stop_id,
+		s.stop_code,
+		s.stop_name,
+		s.platform_code
 	FROM active_gtfs_stops s
 	WHERE s.stop_id = $1
 	   OR s.parent_station = $1
+),
+vehicle AS (
+	SELECT *
+	FROM kv6_current_vehicle v
+	WHERE v.event_timestamp > now() - interval '5 minutes'
+	  AND v.status IN ('ARRIVAL', 'ONSTOP', 'INIT')
 )
 SELECT
 	v.operating_day,
@@ -45,14 +56,24 @@ SELECT
 	r.route_short_name,
 	r.route_color,
 	r.route_text_color
-FROM kv6_current_vehicle v
+FROM vehicle v
 JOIN stop_scope s
 	ON s.stop_code = v.user_stop_code
 LEFT JOIN active_gtfs_trips t
-    ON t.realtime_trip_id = v.realtime_trip_id
+	ON t.feed_ref = s.feed_ref
+   AND t.realtime_trip_id = v.realtime_trip_id
    AND t.realtime_trip_sequence = 1
+LEFT JOIN active_gtfs_calendar_dates cd
+	ON cd.feed_ref = t.feed_ref
+   AND cd.service_id = t.service_id
+   AND cd.date = v.operating_day
+   AND cd.exception_type = 1
 LEFT JOIN active_gtfs_routes r
-    ON r.route_id = t.route_id
-WHERE v.event_timestamp > now() - interval '5 minutes'
-  AND v.status IN ('ARRIVAL', 'ONSTOP', 'INIT')
-ORDER BY v.event_timestamp DESC, v.vehicle_number;
+	ON r.feed_ref = t.feed_ref
+   AND r.route_id = t.route_id
+WHERE t.trip_id IS NULL
+   OR cd.service_id IS NOT NULL
+ORDER BY
+	s.stop_code,
+	v.event_timestamp DESC,
+	v.vehicle_number;

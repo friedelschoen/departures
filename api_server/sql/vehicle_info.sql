@@ -38,7 +38,6 @@ SELECT
 	r.route_short_name,
 	r.route_color,
 	r.route_text_color
-
 FROM kv6_current_vehicle v
 LEFT JOIN active_gtfs_trips t
     ON t.realtime_trip_id = v.realtime_trip_id

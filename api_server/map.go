@@ -40,23 +40,24 @@ type MapPoint struct {
 	Seq int
 }
 
-func writeMapPNG(w http.ResponseWriter, lat, lon float64, markers []MapPoint, shape []MapPoint) error {
+func writeMapPNG(w http.ResponseWriter, zoom int, markers *s2.LatLng, shape []MapPoint) error {
 	ctx := sm.NewContext()
-	ctx.SetSize(900, 500)
-	ctx.SetZoom(14)
-	ctx.SetCenter(s2.LatLngFromDegrees(lat, lon))
+	ctx.SetSize(1200, 600)
+	if zoom > 0 {
+		ctx.SetZoom(zoom)
+	}
 
 	if len(shape) >= 2 {
 		var pts []s2.LatLng
 		for _, p := range shape {
 			pts = append(pts, s2.LatLngFromDegrees(p.Lat, p.Lon))
 		}
-		ctx.AddPath(sm.NewPath(pts, color.RGBA{0, 80, 220, 255}, 5))
+		ctx.AddObject(sm.NewPath(pts, color.RGBA{0, 80, 220, 255}, 3))
 	}
 
-	for _, p := range markers {
-		ctx.AddMarker(sm.NewMarker(
-			s2.LatLngFromDegrees(p.Lat, p.Lon),
+	if markers != nil {
+		ctx.SetCenter(*markers)
+		ctx.AddObject(sm.NewMarker(*markers,
 			color.RGBA{220, 0, 0, 255},
 			16,
 		))
@@ -106,9 +107,7 @@ func TripMapHandler(s Server, w http.ResponseWriter, req *http.Request, params m
 		return
 	}
 
-	center := shape[len(shape)/2]
-
-	writeMapPNG(w, center.Lat, center.Lon, nil, shape)
+	writeMapPNG(w, 0, nil, shape)
 }
 
 type VehicleMapRow struct {
@@ -153,7 +152,7 @@ func VehicleMapHandler(s Server, w http.ResponseWriter, req *http.Request, param
 	}
 
 	lat, lon := rijksdriehoek.RDtoWGS84(float64(*row.RdX), float64(*row.RdY))
-	marker := MapPoint{Lat: lat, Lon: lon}
+	marker := s2.LatLngFromDegrees(lat, lon)
 
 	var shape []MapPoint
 	if row.Status != "END" && row.RealtimeTripID != "" {
@@ -172,5 +171,5 @@ func VehicleMapHandler(s Server, w http.ResponseWriter, req *http.Request, param
 		}
 	}
 
-	writeMapPNG(w, lat, lon, []MapPoint{marker}, shape)
+	writeMapPNG(w, 14, &marker, shape)
 }
