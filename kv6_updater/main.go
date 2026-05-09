@@ -27,7 +27,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -105,21 +104,16 @@ func handleKV6(dbpool *sql.DB, r io.Reader) error {
 				log.Printf("invalid timestamp `%s`: %v\n", item.Timestamp, err)
 				continue
 			}
-			realtimeTripID := []string{item.DataOwnerCode, item.LinePlanningNumber, strconv.Itoa(item.JourneyNumber)}
-			if item.ReinforcementNumber > 0 {
-				realtimeTripID = append(realtimeTripID, strconv.Itoa(item.JourneyNumber))
-			}
 			keys := []string{
 				"operating_day",
 				"data_owner_code",
 				"line_planning_number",
-				"trip_short_name",
+				"journey_number",
 				"reinforcement_number",
-				"realtime_trip_id",
 
 				"status",
 				"source",
-				"event_timestamp",
+				"timestamp",
 			}
 			values := []any{
 				operatingDay,
@@ -127,7 +121,6 @@ func handleKV6(dbpool *sql.DB, r io.Reader) error {
 				item.LinePlanningNumber,
 				item.JourneyNumber,
 				item.ReinforcementNumber,
-				strings.Join(realtimeTripID, ":"),
 
 				status,
 				item.Source,
@@ -206,10 +199,16 @@ func handleKV6(dbpool *sql.DB, r io.Reader) error {
 				}
 			}
 
+			updateset := make([]string, len(keys)-5)
+			for i, key := range keys[5:] {
+				updateset[i] = fmt.Sprintf("%s=EXCLUDED.%s", key, key)
+			}
+
 			_, err = dbpool.Exec(fmt.Sprintf(
-				"INSERT INTO kv6_events (%s) VALUES (%s);",
+				"INSERT INTO kv6_journey_status (%s) VALUES (%s) ON CONFLICT (operating_day, data_owner_code, line_planning_number, journey_number, reinforcement_number) DO UPDATE SET %s;",
 				strings.Join(keys, ", "),
 				strings.Join(placeholders(len(values)), ", "),
+				strings.Join(updateset, ", "),
 			), values...)
 			if err != nil {
 				log.Printf("error in sql: %v\n", err)

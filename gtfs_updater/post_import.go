@@ -23,13 +23,24 @@ import (
 )
 
 var postImporters = []func(tx *sql.Tx, feedRef int64) error{
+	analyzeTables,
 	generateMissingShapes,
 	generateRealtimeSequence,
 	calculateTripBounds,
+	calculateStopEvents,
+}
+
+func analyzeTables(tx *sql.Tx, feedRef int64) error {
+	log.Println("Analyze Tables...")
+	if _, err := tx.Exec(`ANALYZE;`); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func calculateTripBounds(tx *sql.Tx, feedRef int64) error {
-	if _, err := tx.Exec(`SET LOCAL work_mem = '1GB'`); err != nil {
+	if _, err := tx.Exec(`SET LOCAL work_mem = '16MB'`); err != nil {
 		return err
 	}
 
@@ -81,6 +92,202 @@ JOIN gtfs_stop_times end_st
 	ON end_st.feed_ref = b.feed_ref
    AND end_st.trip_id = b.trip_id
    AND end_st.stop_sequence = b.end_sequence;`, feedRef); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func calculateStopEvents(tx *sql.Tx, feedRef int64) error {
+	if _, err := tx.Exec(`SET LOCAL work_mem = '16MB'`); err != nil {
+		return err
+	}
+
+	log.Println("Clearing stop_events...")
+	if _, err := tx.Exec(`
+	DELETE FROM gtfs_stop_events
+	WHERE feed_ref = $1;
+	`, feedRef); err != nil {
+		return err
+	}
+
+	log.Println("Filling stop_events (departure)...")
+	if _, err := tx.Exec(`
+INSERT INTO gtfs_stop_events (
+	feed_ref,
+	mode,
+	service_id,
+	service_date,
+
+	trip_id,
+	realtime_trip_id,
+	realtime_trip_sequence,
+
+	route_id,
+	route_short_name,
+	route_color,
+	route_text_color,
+
+	stop_sequence,
+	stop_id,
+	stop_code,
+	stop_name,
+	platform_code,
+
+	stop_headsign,
+	trip_headsign,
+
+	scheduled_time,
+
+	terminal,
+	event_type,
+	timepoint,
+	shape_dist_traveled,
+	fare_units_traveled
+)
+SELECT
+	st.feed_ref,
+	'departure'::gtfs_stop_event_mode,
+	t.service_id,
+	cd.date,
+
+	t.trip_id,
+	t.realtime_trip_id,
+	t.realtime_trip_sequence,
+
+	r.route_id,
+	r.route_short_name,
+	r.route_color,
+	r.route_text_color,
+
+	st.stop_sequence,
+	s.stop_id,
+	s.stop_code,
+	s.stop_name,
+	s.platform_code,
+
+	st.stop_headsign,
+	t.trip_headsign,
+
+	((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone),
+
+	st.stop_sequence = tb.end_sequence,
+	COALESCE(st.pickup_type, 0),
+	st.timepoint,
+	st.shape_dist_traveled,
+	st.fare_units_traveled
+FROM gtfs_stop_times st
+JOIN gtfs_trips t
+	ON t.feed_ref = st.feed_ref
+   AND t.trip_id = st.trip_id
+JOIN gtfs_routes r
+	ON r.feed_ref = t.feed_ref
+   AND r.route_id = t.route_id
+JOIN gtfs_agency a
+	ON a.feed_ref = r.feed_ref
+   AND a.agency_id = r.agency_id
+JOIN gtfs_stops s
+	ON s.feed_ref = st.feed_ref
+   AND s.stop_id = st.stop_id
+JOIN gtfs_calendar_dates cd
+	ON cd.feed_ref = t.feed_ref
+   AND cd.service_id = t.service_id
+   AND cd.exception_type = 1
+JOIN gtfs_trip_bounds tb
+	ON tb.feed_ref = st.feed_ref
+   AND tb.trip_id = st.trip_id
+WHERE st.feed_ref = $1
+  AND st.departure_time IS NOT NULL;`, feedRef); err != nil {
+		return err
+	}
+
+	log.Println("Filling stop_events (arrival)...")
+	if _, err := tx.Exec(`
+INSERT INTO gtfs_stop_events (
+	feed_ref,
+	mode,
+	service_id,
+	service_date,
+
+	trip_id,
+	realtime_trip_id,
+	realtime_trip_sequence,
+
+	route_id,
+	route_short_name,
+	route_color,
+	route_text_color,
+
+	stop_sequence,
+	stop_id,
+	stop_code,
+	stop_name,
+	platform_code,
+
+	stop_headsign,
+	trip_headsign,
+
+	scheduled_time,
+
+	terminal,
+	event_type,
+	timepoint,
+	shape_dist_traveled,
+	fare_units_traveled
+)
+SELECT
+	st.feed_ref,
+	'arrival'::gtfs_stop_event_mode,
+	t.service_id,
+	cd.date,
+
+	t.trip_id,
+	t.realtime_trip_id,
+	t.realtime_trip_sequence,
+
+	r.route_id,
+	r.route_short_name,
+	r.route_color,
+	r.route_text_color,
+
+	st.stop_sequence,
+	s.stop_id,
+	s.stop_code,
+	s.stop_name,
+	s.platform_code,
+
+	st.stop_headsign,
+	t.trip_headsign,
+
+	((cd.date::timestamp + st.arrival_time) AT TIME ZONE a.agency_timezone),
+
+	st.stop_sequence = tb.start_sequence,
+	COALESCE(st.drop_off_type, 0),
+	st.timepoint,
+	st.shape_dist_traveled,
+	st.fare_units_traveled
+FROM gtfs_stop_times st
+JOIN gtfs_trips t
+	ON t.feed_ref = st.feed_ref
+   AND t.trip_id = st.trip_id
+JOIN gtfs_routes r
+	ON r.feed_ref = t.feed_ref
+   AND r.route_id = t.route_id
+JOIN gtfs_agency a
+	ON a.feed_ref = r.feed_ref
+   AND a.agency_id = r.agency_id
+JOIN gtfs_stops s
+	ON s.feed_ref = st.feed_ref
+   AND s.stop_id = st.stop_id
+JOIN gtfs_calendar_dates cd
+	ON cd.feed_ref = t.feed_ref
+   AND cd.service_id = t.service_id
+   AND cd.exception_type = 1
+JOIN gtfs_trip_bounds tb
+	ON tb.feed_ref = st.feed_ref
+   AND tb.trip_id = st.trip_id
+WHERE st.feed_ref = $1
+  AND st.arrival_time IS NOT NULL;`, feedRef); err != nil {
 		return err
 	}
 
@@ -167,17 +374,11 @@ WHERE t.feed_ref = m.feed_ref
 	return err
 }
 
-func runPostImporters(db *sql.DB, feedRef int64) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+func runPostImporters(tx *sql.Tx, feedRef int64) error {
 	for _, fn := range postImporters {
 		if err := fn(tx, feedRef); err != nil {
 			return err
 		}
 	}
-
-	return tx.Commit()
+	return nil
 }

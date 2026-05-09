@@ -35,8 +35,11 @@ CREATE TABLE IF NOT EXISTS kv6_events (
 
 	vehicle_number INTEGER,
 	block_code INTEGER,
+   
+    wheelchair_accessible BOOLEAN, -- ACCESSIBLE,NOTACCESSIBLE,UNKNOWN -> true,false,null
+    number_of_coaches INTEGER,
 
-	punctuality INTEGER,
+    punctuality INTEGER,
 	rd_x INTEGER,
 	rd_y INTEGER,
 	distance_since_last_user_stop INTEGER
@@ -281,7 +284,6 @@ SELECT
 	k.vehicle_number,
 	k.block_code,
 	k.punctuality
-
 FROM gtfs_stop_times st
 JOIN gtfs_stops s
 	ON s.feed_ref = st.feed_ref

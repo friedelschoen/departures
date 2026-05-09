@@ -144,8 +144,8 @@ CREATE TABLE IF NOT EXISTS gtfs_stop_times (
 	stop_headsign TEXT,
 	arrival_time INTERVAL,
 	departure_time INTERVAL,
-	pickup_type SMALLINT,
-	drop_off_type SMALLINT,
+	pickup_type SMALLINT NOT NULL DEFAULT 0,
+	drop_off_type SMALLINT NOT NULL DEFAULT 0,
 	timepoint SMALLINT,
 	shape_dist_traveled DOUBLE PRECISION,
 	fare_units_traveled INTEGER,
@@ -161,7 +161,67 @@ CREATE TABLE IF NOT EXISTS gtfs_stop_times (
 		ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS gtfs_trip_bounds (
+CREATE TYPE gtfs_stop_event_mode AS ENUM (
+	'arrival',
+	'departure'
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS gtfs_stop_events (
+	feed_ref BIGINT NOT NULL REFERENCES gtfs_feeds(id) ON DELETE CASCADE,
+
+	mode gtfs_stop_event_mode NOT NULL,
+
+	service_id TEXT NOT NULL,
+	service_date DATE NOT NULL,
+
+	trip_id TEXT NOT NULL,
+	realtime_trip_id TEXT,
+	realtime_trip_sequence INTEGER,
+
+	route_id TEXT NOT NULL,
+	route_short_name TEXT,
+	route_color TEXT,
+	route_text_color TEXT,
+
+	stop_sequence INTEGER NOT NULL,
+	stop_id TEXT NOT NULL,
+	stop_code TEXT,
+	stop_name TEXT,
+	platform_code TEXT,
+
+	stop_headsign TEXT,
+	trip_headsign TEXT,
+
+	scheduled_time TIMESTAMPTZ NOT NULL,
+
+	terminal BOOLEAN NOT NULL,
+	event_type SMALLINT NOT NULL DEFAULT 0,
+	timepoint SMALLINT,
+	shape_dist_traveled DOUBLE PRECISION,
+	fare_units_traveled INTEGER,
+
+	PRIMARY KEY (
+		feed_ref,
+		mode,
+		service_date,
+		trip_id,
+		stop_sequence
+	),
+
+	FOREIGN KEY (feed_ref, trip_id)
+		REFERENCES gtfs_trips(feed_ref, trip_id)
+		ON DELETE CASCADE,
+
+	FOREIGN KEY (feed_ref, stop_id)
+		REFERENCES gtfs_stops(feed_ref, stop_id)
+		ON DELETE CASCADE,
+
+	FOREIGN KEY (feed_ref, trip_id, stop_sequence)
+		REFERENCES gtfs_stop_times(feed_ref, trip_id, stop_sequence)
+		ON DELETE CASCADE
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS gtfs_trip_bounds (
 	feed_ref BIGINT NOT NULL,
 
 	trip_id TEXT NOT NULL,
@@ -218,3 +278,5 @@ CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_active_service_date
 	ON gtfs_calendar_dates(feed_ref, service_id, date)
 	WHERE exception_type = 1;
 
+CREATE INDEX IF NOT EXISTS gtfs_stop_events_stop_time_idx
+ON gtfs_stop_events(feed_ref, stop_id, mode, scheduled_time);

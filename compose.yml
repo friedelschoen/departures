@@ -11,6 +11,7 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./prosgresql.conf:/etc/postgresql/postgresql.conf 
       - ./db_init:/docker-entrypoint-initdb.d:ro
 
     healthcheck:
@@ -21,13 +22,6 @@ services:
 
     ports:
       - "5432:5432"
-
-  staticmaps:
-    image: mxdcodes/docker-staticmaps:latest
-    restart: always
-
-    ports:
-      - "3000:3000"
 
   static_server:
     build: frontend

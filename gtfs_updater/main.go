@@ -437,11 +437,7 @@ func importData(db *sql.DB, gtfsURL string) (int64, error) {
 		return 0, os.ErrExist
 	}
 
-	if err := activateFeed(tx, feedRef); err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
+	if err := importTables(tx, feedRef, zr); err != nil {
 		return 0, err
 	}
 
@@ -449,8 +445,16 @@ func importData(db *sql.DB, gtfsURL string) (int64, error) {
 
 	// insert done!
 
-	err = runPostImporters(db, feedRef)
+	err = runPostImporters(tx, feedRef)
 	if err != nil {
+		return 0, err
+	}
+
+	if err := activateFeed(tx, feedRef); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 

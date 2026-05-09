@@ -69,3 +69,9 @@ FROM gtfs_stop_times s
 JOIN gtfs_feeds f ON f.id = s.feed_ref
 WHERE f.active = true;
 
+CREATE OR REPLACE VIEW active_gtfs_stop_events AS
+SELECT s.*
+FROM gtfs_stop_events s
+JOIN gtfs_feeds f ON f.id = s.feed_ref
+WHERE f.active = true;
+
