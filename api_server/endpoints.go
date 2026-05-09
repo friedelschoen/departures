@@ -72,11 +72,17 @@ var mux APIHandleMux = []APIHandler{
 		return []any{params["stop"]}, nil
 	})},
 
+	{[]string{"GET"}, "/api/stop/:stop/arrivals", SQLHandler(stopDepartureSQL, false, func(req *http.Request, params map[string]string) ([]any, error) {
+		from := intervalParam(req, "from", "5 minutes")
+		to := intervalParam(req, "to", "1 hours")
+
+		return []any{"arrival", params["stop"], from, to}, nil
+	})},
 	{[]string{"GET"}, "/api/stop/:stop/departures", SQLHandler(stopDepartureSQL, false, func(req *http.Request, params map[string]string) ([]any, error) {
 		from := intervalParam(req, "from", "5 minutes")
 		to := intervalParam(req, "to", "2 hours")
 
-		return []any{params["stop"], from, to}, nil
+		return []any{"departure", params["stop"], from, to}, nil
 	})},
 
 	{[]string{"GET"}, "/api/stop/:stop/vehicles", SQLHandler(stopVehiclesSQL, false, func(req *http.Request, params map[string]string) ([]any, error) {

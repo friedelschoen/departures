@@ -15,26 +15,32 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-SELECT DISTINCT ON (k.last_event_id)
-	r.route_id,
+SELECT 
+	e.mode,
+
+	e.route_id,
 	r.route_short_name,
 	r.route_color,
 	r.route_text_color,
 
-	t.trip_id,
-	COALESCE(NULLIF(st.stop_headsign, ''), t.trip_headsign) AS headsign,
+	e.trip_id,
+
+	COALESCE(
+		NULLIF(e.stop_headsign, ''),
+		t.trip_headsign
+	) AS headsign,
+
 	s.platform_code,
 
-	EXTRACT(EPOCH FROM (
-		(cd.date::timestamp + CASE WHEN $1 = 'departure' THEN st.departure_time ELSE st.arrival_time END)
-			AT TIME ZONE a.agency_timezone
-	))::bigint AS scheduled_time,
+	EXTRACT(EPOCH FROM e.scheduled_time)::bigint AS scheduled_time,
 
-	st.stop_sequence = tb.end_sequence AS terminal,
+	e.terminal,
 
 	k.status,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
+
 	COALESCE(k.punctuality, 0) AS punctuality,
+
 	k.vehicle_number,
 	k.block_code,
 	k.rd_x,
@@ -42,40 +48,36 @@ SELECT DISTINCT ON (k.last_event_id)
 
 	CASE
 		WHEN
-			((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone)
-				BETWEEN now() AND now() + interval '5 minutes'
+			e.mode = 'departure'
+			AND e.scheduled_time BETWEEN now()
+				AND now() + interval '5 minutes'
 			AND k.vehicle_number IS NULL
-			AND st.stop_sequence <> tb.end_sequence
+			AND NOT e.terminal
 		THEN true
 		ELSE false
 	END AS warning
-FROM active_gtfs_stop_times st
+FROM active_gtfs_stop_events e
 JOIN active_gtfs_stops s
-    ON s.stop_id = st.stop_id
-   AND (s.stop_id = $2 OR s.parent_station = $2)
+    ON s.stop_id = e.stop_id
+   AND (
+		s.stop_id = $2
+		OR s.parent_station = $2
+   )
 JOIN active_gtfs_trips t
-    ON t.trip_id = st.trip_id
+    ON t.trip_id = e.trip_id
 JOIN active_gtfs_routes r
-    ON r.route_id = t.route_id
-JOIN active_gtfs_agency a
-    ON a.agency_id = r.agency_id
-JOIN active_gtfs_calendar_dates cd
-    ON cd.service_id = t.service_id
-   AND cd.exception_type = 1
-   AND cd.date BETWEEN
-		((now() AT TIME ZONE a.agency_timezone)::date - 1)
-		AND
-		((now() AT TIME ZONE a.agency_timezone)::date + 1)
-JOIN active_gtfs_trip_bounds tb
-    ON tb.trip_id = st.trip_id
-JOIN kv6_current_trip k
-	ON k.operating_day = cd.date
+    ON r.route_id = e.route_id
+LEFT JOIN kv6_current_trip k
+	ON k.operating_day = e.service_date
    AND k.realtime_trip_id = t.realtime_trip_id
-WHERE (
-	(cd.date::timestamp + st.departure_time)
-		AT TIME ZONE a.agency_timezone
-) BETWEEN now() - $3::interval
-    AND now() + $4::interval
-ORDER BY k.last_event_id,
-	((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone)
-	+ (COALESCE(k.punctuality, 0) * interval '1 second');
+WHERE e.mode = $1::gtfs_stop_event_mode
+  AND e.scheduled_time BETWEEN
+		now() - $3::interval
+		AND
+		now() + $4::interval
+ORDER BY
+	e.scheduled_time
+		+ (
+			COALESCE(k.punctuality, 0)
+			* interval '1 second'
+		);

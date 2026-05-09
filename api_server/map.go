@@ -56,7 +56,9 @@ func writeMapPNG(w http.ResponseWriter, zoom int, markers *s2.LatLng, shape []Ma
 	}
 
 	if markers != nil {
-		ctx.SetCenter(*markers)
+		if zoom > 0 {
+			ctx.SetCenter(*markers)
+		}
 		ctx.AddObject(sm.NewMarker(*markers,
 			color.RGBA{220, 0, 0, 255},
 			16,

@@ -21,8 +21,8 @@ SELECT
 	s.stop_code,
 	s.stop_name,
 	s.platform_code,
-    (cd.date + st.arrival_time) AT TIME ZONE a.agency_timezone as arrival_time,
-    (cd.date + st.departure_time) AT TIME ZONE a.agency_timezone as departure_time,
+    EXTRACT(EPOCH FROM (cd.date + st.arrival_time) AT TIME ZONE a.agency_timezone)::bigint as arrival_time,
+    EXTRACT(EPOCH FROM (cd.date + st.departure_time) AT TIME ZONE a.agency_timezone)::bigint as departure_time,
 
 	k.status,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,

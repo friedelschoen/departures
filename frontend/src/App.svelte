@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 
-	let stop = new URL(document.location.toString()).searchParams.get("stop") ?? "";
-	let showTerminal = new URL(document.location.toString()).searchParams.has("show-terminal")
-		? new URL(document.location.toString()).searchParams.get("show-terminal") !== null
-		: true;
+    let url = new URL(document.location.toString());
+	let stop = url.searchParams.get("stop") ?? "";
+    let mode = url.searchParams.get("mode") ?? "departure";
+    if (mode !== "arrival")
+	    mode = "departure";
+    let showTerminal = url.searchParams.get("show-terminal") == "on";
 
 	let stopInfo = null;
 	let stopResults = [];
-	let departures = [];
+	let events = [];
 	let vehicles = [];
 
 	let openTrip = null;
@@ -67,7 +69,7 @@
 		return Math.trunc((d.punctuality ?? 0) / 60);
 	}
 
-	function displayedDepartures(list) {
+	function displayedEvents(list) {
 		return list.filter(d => showTerminal || !d.terminal);
 	}
 
@@ -77,7 +79,7 @@
 		let nowInserted = !insertNow;
 		const now = new Date();
 
-		for (const d of displayedDepartures(list)) {
+		for (const d of displayedEvents(list)) {
 			const departureTime = new Date(realtimeTime(d) * 1000);
 			const date = departureTime.toLocaleDateString("nl-NL", {
 				day: "2-digit",
@@ -129,23 +131,25 @@
 		stopInfo = list[0] ?? null;
 	}
 
-	async function loadDepartures() {
-		if (!stop) return;
+    async function loadEvents() {
+	    if (!stop) return;
 
-		const [depData, vehData] = await Promise.all([
-			fetchJSON("/api/stop/" + encodeURIComponent(stop) + "/departures"),
-			fetchJSON("/api/stop/" + encodeURIComponent(stop) + "/vehicles")
-		]);
+    	const eventPath = mode === "arrival" ? "arrivals" : "departures";
 
-		departures = asList(depData);
-		vehicles = asList(vehData);
+	    const [eventData, vehData] = await Promise.all([
+		    fetchJSON("/api/stop/" + encodeURIComponent(stop) + "/" + eventPath),
+	    	fetchJSON("/api/stop/" + encodeURIComponent(stop) + "/vehicles")
+    	]);
 
-		if (openTrip && !departures.some(d => d.trip_id === openTrip)) {
-			openTrip = null;
-			openTripInfo = null;
-			openTripStops = [];
-		}
-	}
+	    events = asList(eventData);
+	    vehicles = asList(vehData);
+
+    	if (openTrip && !events.some(d => d.trip_id === openTrip)) {
+	    	openTrip = null;
+		    openTripInfo = null;
+    		openTripStops = [];
+	    }
+    }
 
     async function updateTripCard() {
         if (!openTrip) return;
@@ -191,41 +195,100 @@
 	}
 
 	function selectStop(s) {
-		stop = s.id;
+		stop = s.stop_id;
 		stopResults = [];
 	}
 
-	function submit() {
-		const url = new URL(document.location.toString());
-		url.searchParams.set("stop", stop);
+    function setMode(next) {
+	    if (mode === next) return;
 
-		if (showTerminal)
-			url.searchParams.set("show-terminal", "on");
-		else
-			url.searchParams.delete("show-terminal");
+    	mode = next;
+	    openTrip = null;
+	    openTripInfo = null;
+	    openTripStops = [];
 
-		document.location = url.toString();
+    	const url = new URL(document.location.toString());
+	    url.searchParams.set("mode", mode);
+    	history.replaceState(null, "", url.toString());
+
+    	loadEvents();
+    }
+
+function eventHHMM(v) {
+	if (!v) return "";
+
+	const d = new Date(v);
+	if (!Number.isNaN(d.getTime()))
+		return hhmm(d);
+
+	if (typeof v === "number")
+		return hhmm(new Date(v * 1000));
+
+	return String(v).slice(11, 16);
+}
+
+function tripStopRows(stops) {
+	const out = [];
+
+	for (const st of stops) {
+		const arr = st.arrival_time;
+		const dep = st.departure_time;
+
+		if (arr && dep && eventHHMM(arr) !== eventHHMM(dep)) {
+			out.push({ ...st, event_mode: "A", event_time: arr });
+			out.push({ ...st, event_mode: "D", event_time: dep });
+		} else {
+			out.push({
+				...st,
+				event_mode: arr ? "A" : "D",
+				event_time: arr ?? dep
+			});
+		}
 	}
 
-	onMount(() => {
+	return out;
+}
+
+function stopRowClass(st) {
+	const s = statusText(st.status);
+
+	return {
+		"near-stop": s === "near",
+		"active-stop": s !== "" && s !== "passed" && s !== "near"
+	};
+}
+
+    function submit() {
+	    const url = new URL(document.location.toString());
+    	url.searchParams.set("stop", stop);
+	    url.searchParams.set("mode", mode);
+
+    	if (showTerminal)
+	    	url.searchParams.set("show-terminal", "on");
+	    else
+		    url.searchParams.delete("show-terminal");
+
+    	document.location = url.toString();
+    }
+
+    onMount(() => {
 		loadStopInfo();
-		loadDepartures();
+		loadEvents();
 
         const timer = setInterval(() => {
             if (openTrip) 
                 updateTripCard();
             else
-                loadDepartures();
+                loadEvents();
         }, 10000); // 10 secounds
 		return () => clearInterval(timer);
 	});
 </script>
 
 <h1>
+    {mode === "arrival" ? "Arrivals" : "Departures"}
 	{#if stopInfo}
-		Departures for <i>{stopInfo.stop_name}</i>
-	{:else}
-		Departures
+		for <i>{stopInfo.stop_name}</i>
 	{/if}
 </h1>
 
@@ -244,7 +307,7 @@
 					<div class="autocomplete-results">
 						{#each stopResults as s}
 							<div on:click={() => selectStop(s)}>
-								{s.name} ({s.id})
+								{s.stop_name} ({s.stop_id})
 							</div>
 						{/each}
 					</div>
@@ -263,16 +326,34 @@
 			<input type="submit" value="Load">
 		</div>
 	</form>
+
+    <div class="tabs">
+	<button
+		type="button"
+		class:active={mode === "departure"}
+		on:click={() => setMode("departure")}
+	>
+		Departures
+	</button>
+
+	<button
+		type="button"
+		class:active={mode === "arrival"}
+		on:click={() => setMode("arrival")}
+	>
+		Arrivals
+	</button>
+</div>
 </div>
 
-<h2>Vehicles at stop</h2>
+<h2>Vehicles</h2>
 
 <table>
 	<thead>
 		<tr>
 			<th style="width:20px;"></th>
 			<th style="width:20px;"></th>
-			<th>Destination</th>
+    		<th>Destination</th>
 			<th>Status</th>
 			<th>Delay</th>
 			<th>Vehicle</th>
@@ -298,7 +379,7 @@
 	</tbody>
 </table>
 
-<h2>Departures</h2>
+<h2>{mode === "arrival" ? "Arrivals" : "Departures"}</h2>
 
 <table>
 	<thead>
@@ -307,12 +388,12 @@
 			<th style="width:20px;"></th>
 			<th style="width:20px;"></th>
 			<th>Destination</th>
-			<th>Scheduled</th>
+            <th>Scheduled</th>
 			<th>Delay</th>
 		</tr>
 	</thead>
 	<tbody>
-		{#each rowsWithMarkers(departures, true) as row}
+		{#each rowsWithMarkers(events, true) as row}
 			{#if row.type === "date"}
 				<tr>
 					<td colspan="6" class="date-row">{row.date}</td>
@@ -341,16 +422,14 @@
 					<td style={lineStyle(d)}>{d.route_short_name}</td>
 					<td>{d.headsign}</td>
 					<td>
-						{#if d.scheduled_time === realtimeTime(d)}
+						{#if d.punctuality == 0}
 							<b>{hhmm(scheduled)}</b>
 						{:else}
 							<s>{hhmm(scheduled)}</s> <b>{hhmm(realtime)}</b>
 						{/if}
 					</td>
 					<td class:delay={delay > 0}>
-						{#if delay !== 0}
-							{delay > 0 ? "+" : ""}{delay} min
-						{/if}
+						{delayText(delay)}
 					</td>
 				</tr>
 
@@ -402,34 +481,42 @@
 									{/if}
 
 									<table class="trip-stops">
-										<thead>
-											<tr>
-												<th>#</th>
-												<th>Stop</th>
-												<th>Arrival</th>
-												<th>Departure</th>
-												<th>Status</th>
-												<th>Delay</th>
-											</tr>
-										</thead>
-										<tbody>
-											{#each openTripStops as st}
-												<tr class:current-stop={st.status && st.status !== "END"}>
-													<td>{st.stop_sequence}</td>
-													<td>
-														{st.stop_name}
-														{#if st.platform_code}
-															<span class="muted">platform {st.platform_code}</span>
-														{/if}
-													</td>
-													<td>{st.arrival_time ?? ""}</td>
-													<td>{st.departure_time ?? ""}</td>
-													<td>{statusText(st.status)}</td>
-													<td>{delayText(Math.trunc((st.punctuality ?? 0) / 60))}</td>
-												</tr>
-											{/each}
-										</tbody>
-									</table>
+                                        <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th></th>
+                                            <th>Stop</th>
+                                            <th>Time</th>
+                                            <th>Delay</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {#each tripStopRows(openTripStops) as st}
+                                            {@const s = statusText(st.status)}
+                                            {@const delay = Math.trunc((st.punctuality ?? 0) / 60)}
+
+                                            <tr
+                                                class:near-stop={s === "near"}
+                                                class:active-stop={s !== "" && s !== "passed" && s !== "near"}
+                                            >
+                                                <td>{st.stop_sequence}</td>
+                                                <td class="event-mode">{st.event_mode}</td>
+                                                <td>
+                                                    {st.stop_name}
+                                                    {#if st.platform_code}
+                                                        <span class="muted">platform {st.platform_code}</span>
+                                                    {/if}
+                                                </td>
+                                                <td>{eventHHMM(st.event_time)}</td>
+                                                <td class="trip-delay">
+                                                    {#if st.status}
+                                                        {delayText(delay)}
+                                                    {/if}
+                                                </td>
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
 								{/if}
 							</div>
 						</td>
