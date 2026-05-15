@@ -31,6 +31,8 @@ SELECT
 	COALESCE(v.punctuality, 0) AS punctuality,
 	v.rd_x,
 	v.rd_y,
+    v.lat,
+    v.lon,
 
 	t.trip_id,
 	t.trip_headsign,
@@ -46,5 +48,5 @@ LEFT JOIN active_gtfs_routes r
     ON r.route_id = t.route_id
 WHERE v.data_owner_code = $1
   AND v.vehicle_number = $2
-ORDER BY v.operating_day DESC
+ORDER BY v.event_timestamp DESC
 LIMIT 15;

@@ -1,0 +1,106 @@
+{
+	"type": "object",
+	"properties": {
+		"block_code": {
+			"type": "integer"
+		},
+		"data_owner_code": {
+			"type": "string"
+		},
+		"direction_id": {
+			"type": "integer"
+		},
+		"first_seen": {
+			"type": "integer"
+		},
+		"last_seen": {
+			"type": "integer"
+		},
+		"lat": {
+			"type": "number"
+		},
+		"line_planning_number": {
+			"type": "string"
+		},
+		"lon": {
+			"type": "number"
+		},
+		"operating_day": {
+			"type": "string"
+		},
+		"punctuality": {
+			"type": "integer"
+		},
+		"rd_x": {
+			"type": "integer"
+		},
+		"rd_y": {
+			"type": "integer"
+		},
+		"realtime_trip_id": {
+			"type": "string"
+		},
+		"reinforcement_number": {
+			"type": "integer"
+		},
+		"route_color": {
+			"type": "string"
+		},
+		"route_id": {
+			"type": "string"
+		},
+		"route_short_name": {
+			"type": "string"
+		},
+		"route_text_color": {
+			"type": "string"
+		},
+		"status": {
+			"type": "string"
+		},
+		"trip_headsign": {
+			"type": "string"
+		},
+		"trip_id": {
+			"type": "string"
+		},
+		"trip_short_name": {
+			"type": "integer"
+		},
+		"vehicle_last_seen": {
+			"type": "integer"
+		},
+		"vehicle_number": {
+			"type": "integer"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "Block",
+	"required": [
+		"operating_day",
+		"data_owner_code",
+		"block_code",
+		"realtime_trip_id",
+		"line_planning_number",
+		"trip_short_name",
+		"reinforcement_number",
+		"first_seen",
+		"last_seen",
+		"trip_id",
+		"trip_headsign",
+		"direction_id",
+		"route_id",
+		"route_short_name",
+		"route_color",
+		"route_text_color",
+		"vehicle_number",
+		"status",
+		"vehicle_last_seen",
+		"punctuality",
+		"rd_x",
+		"rd_y",
+		"lat",
+		"lon"
+	]
+}

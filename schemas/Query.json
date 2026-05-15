@@ -1,0 +1,58 @@
+{
+	"type": "object",
+	"properties": {
+		"block_code": {
+			"type": "integer"
+		},
+		"data_owner_code": {
+			"type": "string"
+		},
+		"label": {
+			"type": "string"
+		},
+		"rank": {
+			"type": "integer"
+		},
+		"route_color": {
+			"type": "string"
+		},
+		"route_id": {
+			"type": "string"
+		},
+		"route_short_name": {
+			"type": "string"
+		},
+		"route_text_color": {
+			"type": "string"
+		},
+		"stop_id": {
+			"type": "string"
+		},
+		"subtitle": {
+			"type": "string"
+		},
+		"type": {
+			"type": "string"
+		},
+		"vehicle_number": {
+			"type": "integer"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "Query",
+	"required": [
+		"type",
+		"label",
+		"subtitle",
+		"stop_id",
+		"route_id",
+		"data_owner_code",
+		"vehicle_number",
+		"block_code",
+		"route_short_name",
+		"route_color",
+		"route_text_color",
+		"rank"
+	]
+}

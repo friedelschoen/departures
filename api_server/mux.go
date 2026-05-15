@@ -32,12 +32,8 @@ func (err StatusError) Error() string {
 	return http.StatusText(int(err))
 }
 
-type APIHandlerFunc func(s Server, w http.ResponseWriter, req *http.Request, placeholders map[string]string)
-
-type APIHandler struct {
-	Methods []string
-	URL     string
-	Handler APIHandlerFunc
+type APIHandler interface {
+	Handle(srv Server, w http.ResponseWriter, req *http.Request) bool
 }
 
 type Response struct {
@@ -64,78 +60,6 @@ func writeResponse(w http.ResponseWriter, result any, status int) {
 	}
 }
 
-type SQLArgumentFunc func(req *http.Request, params map[string]string) ([]any, error)
-
-func getSQLResult(s Server, req *http.Request, placeholders map[string]string, query string, single bool, args SQLArgumentFunc) (any, error) {
-	var ar []any
-	if args != nil {
-		var err error
-		ar, err = args(req, placeholders)
-		if err != nil {
-			return nil, err
-		}
-	}
-	rows, err := s.db.Query(query, ar...)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer rows.Close()
-
-	names, err := rows.Columns()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	row := make([]any, len(names))
-	out := []map[string]any{}
-	for rows.Next() {
-		for i := range row {
-			row[i] = new(any)
-		}
-		if err := rows.Scan(row...); err != nil {
-			log.Fatalln(err)
-		}
-		dest := make(map[string]any, len(names))
-		for i, key := range names {
-			v := row[i]
-			switch x := v.(type) {
-			case []byte:
-				dest[key] = string(x)
-			default:
-				dest[key] = x
-			}
-		}
-		out = append(out, dest)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if single {
-		if len(out) == 0 {
-			return nil, StatusError(http.StatusNotFound)
-		}
-		return out[0], nil
-	}
-	return out, nil
-}
-
-func SQLHandler(query string, single bool, args SQLArgumentFunc) APIHandlerFunc {
-	return func(s Server, w http.ResponseWriter, req *http.Request, placeholders map[string]string) {
-		result, err := getSQLResult(s, req, placeholders, query, single, args)
-
-		var status int
-		switch err := err.(type) {
-		case StatusError:
-			status = int(err)
-		case nil:
-			status = http.StatusOK
-		default:
-			status = http.StatusInternalServerError
-			log.Printf("error while handling %s %v: %v\n", req.Method, req.URL, err)
-		}
-		writeResponse(w, result, status)
-	}
-}
-
 type APIHandleMux []APIHandler
 
 type Handler struct {
@@ -143,13 +67,13 @@ type Handler struct {
 	Mux    APIHandleMux
 }
 
-func (h APIHandler) Match(method string, target string) (map[string]string, bool) {
-	if len(h.Methods) > 0 && !slices.Contains(h.Methods, method) {
+func (s SQLHandler) Match(method string, target string) (map[string]string, bool) {
+	if len(s.Methods) > 0 && !slices.Contains(s.Methods, method) {
 		return nil, false
 	}
 
 	targetS := strings.Split(strings.Trim(target, "/"), "/")
-	matchS := strings.Split(strings.Trim(h.URL, "/"), "/")
+	matchS := strings.Split(strings.Trim(s.Endpoint, "/"), "/")
 	if len(targetS) != len(matchS) {
 		return nil, false
 	}
@@ -168,10 +92,10 @@ func (h APIHandler) Match(method string, target string) (map[string]string, bool
 
 	return placeholders, true
 }
+
 func (h Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, route := range h.Mux {
-		if pl, ok := route.Match(req.Method, req.URL.Path); ok {
-			route.Handler(h.Server, w, req, pl)
+		if ok := route.Handle(h.Server, w, req); ok {
 			return
 		}
 	}

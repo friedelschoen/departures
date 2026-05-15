@@ -1,0 +1,30 @@
+{
+	"type": "object",
+	"properties": {
+		"parent_station": {
+			"type": "string"
+		},
+		"platform_code": {
+			"type": "string"
+		},
+		"stop_code": {
+			"type": "string"
+		},
+		"stop_id": {
+			"type": "string"
+		},
+		"stop_name": {
+			"type": "string"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "StopQuery",
+	"required": [
+		"stop_id",
+		"stop_code",
+		"stop_name",
+		"parent_station",
+		"platform_code"
+	]
+}

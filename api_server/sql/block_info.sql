@@ -50,7 +50,9 @@ SELECT DISTINCT ON (
 	COALESCE(v.punctuality, 0) AS punctuality,
 
 	v.rd_x,
-	v.rd_y
+	v.rd_y,
+    v.lat,
+    v.lon
 FROM kv6_block_trip_history h
 LEFT JOIN active_gtfs_trips t
 	ON t.realtime_trip_id = h.realtime_trip_id
@@ -62,12 +64,13 @@ LEFT JOIN kv6_current_vehicle v
    AND v.data_owner_code = h.data_owner_code
    AND v.block_code = h.block_code
    AND v.realtime_trip_id = h.realtime_trip_id
-WHERE h.block_code = $1
+WHERE  h.data_owner_code = $1 
+    AND h.block_code = $2
 ORDER BY
 	h.operating_day,
 	h.data_owner_code,
 	h.block_code,
 	h.realtime_trip_id,
-	v.event_timestamp DESC NULLS LAST,
-	h.first_seen DESC;
+	h.first_seen DESC,
+	v.event_timestamp DESC NULLS LAST;
 

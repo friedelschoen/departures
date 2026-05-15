@@ -1,0 +1,26 @@
+{
+	"type": "object",
+	"properties": {
+		"route_color": {
+			"type": "string"
+		},
+		"route_id": {
+			"type": "string"
+		},
+		"route_short_name": {
+			"type": "string"
+		},
+		"route_text_color": {
+			"type": "string"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "StopRoute",
+	"required": [
+		"route_short_name",
+		"route_color",
+		"route_text_color",
+		"route_id"
+	]
+}

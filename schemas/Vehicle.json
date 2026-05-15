@@ -1,0 +1,102 @@
+{
+	"type": "object",
+	"properties": {
+		"block_code": {
+			"type": "integer"
+		},
+		"data_owner_code": {
+			"type": "string"
+		},
+		"last_seen": {
+			"type": "integer"
+		},
+		"lat": {
+			"type": "number"
+		},
+		"line_planning_number": {
+			"type": "string"
+		},
+		"lon": {
+			"type": "number"
+		},
+		"operating_day": {
+			"type": "string"
+		},
+		"passage_sequence_number": {
+			"type": "integer"
+		},
+		"punctuality": {
+			"type": "integer"
+		},
+		"rd_x": {
+			"type": "integer"
+		},
+		"rd_y": {
+			"type": "integer"
+		},
+		"realtime_trip_id": {
+			"type": "string"
+		},
+		"reinforcement_number": {
+			"type": "integer"
+		},
+		"route_color": {
+			"type": "string"
+		},
+		"route_id": {
+			"type": "string"
+		},
+		"route_short_name": {
+			"type": "string"
+		},
+		"route_text_color": {
+			"type": "string"
+		},
+		"status": {
+			"type": "string"
+		},
+		"trip_headsign": {
+			"type": "string"
+		},
+		"trip_id": {
+			"type": "string"
+		},
+		"trip_short_name": {
+			"type": "integer"
+		},
+		"user_stop_code": {
+			"type": "string"
+		},
+		"vehicle_number": {
+			"type": "integer"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "Vehicle",
+	"required": [
+		"operating_day",
+		"data_owner_code",
+		"vehicle_number",
+		"realtime_trip_id",
+		"line_planning_number",
+		"trip_short_name",
+		"reinforcement_number",
+		"status",
+		"last_seen",
+		"user_stop_code",
+		"passage_sequence_number",
+		"block_code",
+		"punctuality",
+		"rd_x",
+		"rd_y",
+		"lat",
+		"lon",
+		"trip_id",
+		"trip_headsign",
+		"route_id",
+		"route_short_name",
+		"route_color",
+		"route_text_color"
+	]
+}

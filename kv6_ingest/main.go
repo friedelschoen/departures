@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dylandreimerink/go-rijksdriehoek"
 	_ "github.com/lib/pq"
 	zmq "github.com/pebbe/zmq4"
 )
@@ -179,8 +180,9 @@ func handleKV6(dbpool *sql.DB, r io.Reader) error {
 
 				// In the Netherlands, rd-x and rd-y are always positive
 				if item.RdX > 0 || item.RdY > 0 {
-					keys = append(keys, "rd_x", "rd_y")
-					values = append(values, item.RdX, item.RdY)
+					lat, lon := rijksdriehoek.RDtoWGS84(float64(item.RdX), float64(item.RdY))
+					keys = append(keys, "rd_x", "rd_y", "lat", "lon")
+					values = append(values, item.RdX, item.RdY, lat, lon)
 				}
 
 				if status == "ONROUTE" {
@@ -201,8 +203,9 @@ func handleKV6(dbpool *sql.DB, r io.Reader) error {
 
 				// In the Netherlands, rd-x and rd-y are always positive
 				if item.RdX > 0 || item.RdY > 0 {
-					keys = append(keys, "rd_x", "rd_y")
-					values = append(values, item.RdX, item.RdY)
+					lat, lon := rijksdriehoek.RDtoWGS84(float64(item.RdX), float64(item.RdY))
+					keys = append(keys, "rd_x", "rd_y", "lat", "lon")
+					values = append(values, item.RdX, item.RdY, lat, lon)
 				}
 			}
 

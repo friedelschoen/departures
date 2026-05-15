@@ -15,40 +15,40 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-SELECT
-	st.stop_sequence,
-	st.stop_id,
-	s.stop_code,
-	s.stop_name,
-	s.platform_code,
-    EXTRACT(EPOCH FROM (cd.date + st.arrival_time) AT TIME ZONE a.agency_timezone)::bigint as arrival_time,
-    EXTRACT(EPOCH FROM (cd.date + st.departure_time) AT TIME ZONE a.agency_timezone)::bigint as departure_time,
+SELECT DISTINCT ON (
+	e.stop_sequence,
+    e.mode
+)
+	e.mode::text,
+	e.stop_sequence,
+	e.stop_id,
+	e.stop_code,
+	e.stop_name,
+	e.platform_code,
+
+	EXTRACT(EPOCH FROM e.scheduled_time)::bigint AS scheduled_time,
 
 	k.status,
-	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
+    k.operating_day,
 	k.vehicle_number,
-	k.block_code,
+	kt.block_code,
 	k.punctuality
-FROM active_gtfs_trips t
-JOIN active_gtfs_stop_times st
-    ON st.trip_id = t.trip_id
-JOIN active_gtfs_stops s
-    ON s.stop_id = st.stop_id
-JOIN active_gtfs_routes r 
-    ON r.route_id = t.route_id
-JOIN active_gtfs_agency a 
-    ON a.agency_id = r.agency_id
-JOIN active_gtfs_calendar_dates cd
-    ON cd.service_id = t.service_id 
-    AND cd.service_id = t.service_id
-   AND cd.exception_type = 1
-   AND cd.date BETWEEN
-		((now() AT TIME ZONE a.agency_timezone)::date - 1)
-		AND
-		((now() AT TIME ZONE a.agency_timezone)::date + 1) 
+FROM active_gtfs_stop_events e
 LEFT JOIN kv6_trip_stop_status k
 	ON k.operating_day = current_date
-   AND k.realtime_trip_id = t.realtime_trip_id
-   AND k.user_stop_code = s.stop_code
-WHERE t.trip_id = $1
-ORDER BY st.stop_sequence;
+   AND k.realtime_trip_id = e.realtime_trip_id
+   AND k.user_stop_code = e.stop_code
+   AND (
+       (e.mode = 'arrival' AND k.status IN ('ARRIVAL', 'ONROUTE'))
+     OR (e.mode = 'departure' AND k.status IN ('DEPARTURE', 'ONROUTE'))
+)
+LEFT JOIN kv6_current_trip kt 
+	ON k.operating_day = current_date
+   AND k.realtime_trip_id = e.realtime_trip_id
+WHERE e.trip_id = $1 
+    AND NOT e.terminal
+ORDER BY
+	e.stop_sequence,
+    e.mode,
+    k.status = 'ONROUTE';
+

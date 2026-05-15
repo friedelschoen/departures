@@ -175,6 +175,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS gtfs_stop_events (
 	service_date DATE NOT NULL,
 
 	trip_id TEXT NOT NULL,
+    direction_id SMALLINT,
 	realtime_trip_id TEXT,
 	realtime_trip_sequence INTEGER,
 
@@ -195,6 +196,8 @@ CREATE UNLOGGED TABLE IF NOT EXISTS gtfs_stop_events (
 	scheduled_time TIMESTAMPTZ NOT NULL,
 
 	terminal BOOLEAN NOT NULL,
+	first_stop BOOLEAN NOT NULL,
+	last_stop BOOLEAN NOT NULL,
 	event_type SMALLINT NOT NULL DEFAULT 0,
 	timepoint SMALLINT,
 	shape_dist_traveled DOUBLE PRECISION,
@@ -255,28 +258,3 @@ CREATE UNLOGGED TABLE IF NOT EXISTS gtfs_trip_bounds (
 		ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_gtfs_feeds_active_imported
-	ON gtfs_feeds (imported_at DESC)
-	WHERE active = true;
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_stops_parent
-	ON gtfs_stops(feed_ref, parent_station);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_stops_code
-	ON gtfs_stops(feed_ref, stop_code);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route
-	ON gtfs_trips(feed_ref, route_id);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_trips_service
-	ON gtfs_trips(feed_ref, service_id);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_trips_realtime_match
-	ON gtfs_trips(feed_ref, realtime_trip_id, realtime_trip_sequence, service_id);
-
-CREATE INDEX IF NOT EXISTS idx_gtfs_calendar_dates_active_service_date
-	ON gtfs_calendar_dates(feed_ref, service_id, date)
-	WHERE exception_type = 1;
-
-CREATE INDEX IF NOT EXISTS gtfs_stop_events_stop_time_idx
-ON gtfs_stop_events(feed_ref, stop_id, mode, scheduled_time);

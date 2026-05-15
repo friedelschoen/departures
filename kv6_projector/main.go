@@ -39,14 +39,16 @@ type Event struct {
 	Status                    string
 	EventTimestamp            time.Time
 	Source                    string
-	UserStopCode              sql.NullString
-	PassageSequenceNumber     sql.NullInt64
-	VehicleNumber             sql.NullInt64
-	BlockCode                 sql.NullInt64
-	Punctuality               sql.NullInt64
-	RdX                       sql.NullInt64
-	RdY                       sql.NullInt64
-	DistanceSinceLastUserStop sql.NullInt64
+	UserStopCode              *string
+	PassageSequenceNumber     *int64
+	VehicleNumber             *int64
+	BlockCode                 *int64
+	Punctuality               *int64
+	RdX                       *int64
+	RdY                       *int64
+	Lat                       *float64
+	Lon                       *float64
+	DistanceSinceLastUserStop *int64
 }
 
 func ensureoffset(tx *sql.Tx) error {
@@ -105,6 +107,8 @@ func readevents(tx *sql.Tx, after int64, limit int) ([]Event, error) {
 			punctuality,
 			rd_x,
 			rd_y,
+			lat,
+			lon,
 			distance_since_last_user_stop
 		FROM kv6_events
 		WHERE id > $1
@@ -139,6 +143,8 @@ func readevents(tx *sql.Tx, after int64, limit int) ([]Event, error) {
 			&ev.Punctuality,
 			&ev.RdX,
 			&ev.RdY,
+			&ev.Lat,
+			&ev.Lon,
 			&ev.DistanceSinceLastUserStop,
 		); err != nil {
 			return nil, err
@@ -168,13 +174,15 @@ func projectcurrenttrip(tx *sql.Tx, ev Event) error {
 			punctuality,
 			rd_x,
 			rd_y,
+			lat,
+			lon,
 			last_event_id
 		)
 		VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16
+			$16, $17, $18
 		)
 		ON CONFLICT (
 			operating_day,
@@ -188,12 +196,14 @@ func projectcurrenttrip(tx *sql.Tx, ev Event) error {
 			status = EXCLUDED.status,
 			event_timestamp = EXCLUDED.event_timestamp,
 			vehicle_number = EXCLUDED.vehicle_number,
-			block_code = EXCLUDED.block_code,
+			block_code = COALESCE(EXCLUDED.block_code, kv6_current_trip.block_code),
 			user_stop_code = EXCLUDED.user_stop_code,
 			passage_sequence_number = EXCLUDED.passage_sequence_number,
 			punctuality = EXCLUDED.punctuality,
 			rd_x = EXCLUDED.rd_x,
 			rd_y = EXCLUDED.rd_y,
+			lat = EXCLUDED.lat,
+			lon = EXCLUDED.lon,
 			last_event_id = EXCLUDED.last_event_id
 		WHERE EXCLUDED.event_timestamp >= kv6_current_trip.event_timestamp
 	`,
@@ -205,13 +215,15 @@ func projectcurrenttrip(tx *sql.Tx, ev Event) error {
 		ev.JourneyKey,
 		ev.Status,
 		ev.EventTimestamp,
-		nullint(ev.VehicleNumber),
-		nullint(ev.BlockCode),
-		nullstr(ev.UserStopCode),
-		nullint(ev.PassageSequenceNumber),
-		nullint(ev.Punctuality),
-		nullint(ev.RdX),
-		nullint(ev.RdY),
+		ev.VehicleNumber,
+		ev.BlockCode,
+		ev.UserStopCode,
+		ev.PassageSequenceNumber,
+		ev.Punctuality,
+		ev.RdX,
+		ev.RdY,
+		ev.Lat,
+		ev.Lon,
 		ev.ID,
 	)
 
@@ -219,7 +231,7 @@ func projectcurrenttrip(tx *sql.Tx, ev Event) error {
 }
 
 func projectcurrentvehicle(tx *sql.Tx, ev Event) error {
-	if !ev.VehicleNumber.Valid {
+	if ev.VehicleNumber == nil {
 		return nil
 	}
 
@@ -240,13 +252,15 @@ func projectcurrentvehicle(tx *sql.Tx, ev Event) error {
 			punctuality,
 			rd_x,
 			rd_y,
+			lat,
+			lon,
 			last_event_id
 		)
 		VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16
+			$16, $17, $18
 		)
 		ON CONFLICT (
 			operating_day,
@@ -262,28 +276,32 @@ func projectcurrentvehicle(tx *sql.Tx, ev Event) error {
 			event_timestamp = EXCLUDED.event_timestamp,
 			user_stop_code = EXCLUDED.user_stop_code,
 			passage_sequence_number = EXCLUDED.passage_sequence_number,
-			block_code = EXCLUDED.block_code,
+			block_code = COALESCE(EXCLUDED.block_code, kv6_current_vehicle.block_code),
 			punctuality = EXCLUDED.punctuality,
 			rd_x = EXCLUDED.rd_x,
 			rd_y = EXCLUDED.rd_y,
+			lat = EXCLUDED.lat,
+			lon = EXCLUDED.lon,
 			last_event_id = EXCLUDED.last_event_id
 		WHERE EXCLUDED.event_timestamp >= kv6_current_vehicle.event_timestamp
 	`,
 		ev.OperatingDay,
 		ev.DataOwnerCode,
-		ev.VehicleNumber.Int64,
+		ev.VehicleNumber,
 		ev.JourneyKey,
 		ev.LinePlanningNumber,
 		ev.JourneyNumber,
 		ev.ReinforcementNumber,
 		ev.Status,
 		ev.EventTimestamp,
-		nullstr(ev.UserStopCode),
-		nullint(ev.PassageSequenceNumber),
-		nullint(ev.BlockCode),
-		nullint(ev.Punctuality),
-		nullint(ev.RdX),
-		nullint(ev.RdY),
+		ev.UserStopCode,
+		ev.PassageSequenceNumber,
+		ev.BlockCode,
+		ev.Punctuality,
+		ev.RdX,
+		ev.RdY,
+		ev.Lat,
+		ev.Lon,
 		ev.ID,
 	)
 
@@ -291,7 +309,7 @@ func projectcurrentvehicle(tx *sql.Tx, ev Event) error {
 }
 
 func projecttripstopstatus(tx *sql.Tx, ev Event) error {
-	if !ev.UserStopCode.Valid || !ev.PassageSequenceNumber.Valid {
+	if ev.UserStopCode == nil || ev.PassageSequenceNumber == nil {
 		return nil
 	}
 
@@ -308,17 +326,18 @@ func projecttripstopstatus(tx *sql.Tx, ev Event) error {
 			status,
 			event_timestamp,
 			vehicle_number,
-			block_code,
 			punctuality,
 			rd_x,
 			rd_y,
+			lat,
+			lon,
 			last_event_id
 		)
 		VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16
+			$16, $17
 		)
 		ON CONFLICT (
 			operating_day,
@@ -327,17 +346,18 @@ func projecttripstopstatus(tx *sql.Tx, ev Event) error {
 			trip_short_name,
 			reinforcement_number,
 			user_stop_code,
-			passage_sequence_number
+			passage_sequence_number,
+			status
 		)
 		DO UPDATE SET
 			realtime_trip_id = EXCLUDED.realtime_trip_id,
-			status = EXCLUDED.status,
 			event_timestamp = EXCLUDED.event_timestamp,
 			vehicle_number = EXCLUDED.vehicle_number,
-			block_code = EXCLUDED.block_code,
 			punctuality = EXCLUDED.punctuality,
 			rd_x = EXCLUDED.rd_x,
 			rd_y = EXCLUDED.rd_y,
+			lat = EXCLUDED.lat,
+			lon = EXCLUDED.lon,
 			last_event_id = EXCLUDED.last_event_id
 		WHERE EXCLUDED.event_timestamp >= kv6_trip_stop_status.event_timestamp
 	`,
@@ -347,15 +367,16 @@ func projecttripstopstatus(tx *sql.Tx, ev Event) error {
 		ev.JourneyNumber,
 		ev.ReinforcementNumber,
 		ev.JourneyKey,
-		ev.UserStopCode.String,
-		ev.PassageSequenceNumber.Int64,
+		ev.UserStopCode,
+		ev.PassageSequenceNumber,
 		ev.Status,
 		ev.EventTimestamp,
-		nullint(ev.VehicleNumber),
-		nullint(ev.BlockCode),
-		nullint(ev.Punctuality),
-		nullint(ev.RdX),
-		nullint(ev.RdY),
+		ev.VehicleNumber,
+		ev.Punctuality,
+		ev.RdX,
+		ev.RdY,
+		ev.Lat,
+		ev.Lon,
 		ev.ID,
 	)
 
@@ -363,7 +384,7 @@ func projecttripstopstatus(tx *sql.Tx, ev Event) error {
 }
 
 func projectvehiclehistory(tx *sql.Tx, ev Event) error {
-	if !ev.VehicleNumber.Valid {
+	if ev.VehicleNumber == nil {
 		return nil
 	}
 
@@ -402,12 +423,12 @@ func projectvehiclehistory(tx *sql.Tx, ev Event) error {
 	`,
 		ev.OperatingDay,
 		ev.DataOwnerCode,
-		ev.VehicleNumber.Int64,
+		ev.VehicleNumber,
 		ev.JourneyKey,
 		ev.LinePlanningNumber,
 		ev.JourneyNumber,
 		ev.ReinforcementNumber,
-		nullint(ev.BlockCode),
+		ev.BlockCode,
 		ev.EventTimestamp,
 		ev.EventTimestamp,
 		ev.ID,
@@ -418,7 +439,7 @@ func projectvehiclehistory(tx *sql.Tx, ev Event) error {
 }
 
 func projectblockhistory(tx *sql.Tx, ev Event) error {
-	if !ev.BlockCode.Valid {
+	if ev.BlockCode == nil {
 		return nil
 	}
 
@@ -455,7 +476,7 @@ func projectblockhistory(tx *sql.Tx, ev Event) error {
 	`,
 		ev.OperatingDay,
 		ev.DataOwnerCode,
-		ev.BlockCode.Int64,
+		ev.BlockCode,
 		ev.JourneyKey,
 		ev.LinePlanningNumber,
 		ev.JourneyNumber,
@@ -467,20 +488,6 @@ func projectblockhistory(tx *sql.Tx, ev Event) error {
 	)
 
 	return err
-}
-
-func nullint(v sql.NullInt64) any {
-	if !v.Valid {
-		return nil
-	}
-	return v.Int64
-}
-
-func nullstr(v sql.NullString) any {
-	if !v.Valid {
-		return nil
-	}
-	return v.String
 }
 
 func project(tx *sql.Tx, ev Event) error {

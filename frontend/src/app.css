@@ -301,15 +301,205 @@ input[type="submit"]:hover {
 	color: #666;
 }
 
-.near-stop td {
+.active-stop td {
+	font-weight: bold;
+}
+
+.passed-stop td {
+	color: #aaa;
+}
+
+.leaflet-map {
+	width: 100%;
+	height: 360px;
+	border: 1px solid #ddd;
+	background: white;
+	margin-bottom: .75rem;
+}
+
+.at-stop {
+    text-decoration: underline;
+}
+
+.route-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .4rem;
+	margin: .5rem 0 1.5rem 0;
+}
+
+.route-pill {
+	display: inline-block;
+	min-width: 1.8rem;
+	padding: .25rem .55rem;
+	border-radius: 4px;
+	border: 1px solid #ddd;
+	background: #fafafa;
+	color: #222;
+	text-align: center;
+	font-weight: 600;
+	text-decoration: none;
+	font-size: .9rem;
+}
+
+.route-pill:hover {
+	filter: brightness(.95);
+	text-decoration: none;
+}
+
+.searchbar {
+	position: relative;
+	width: 100%;
+}
+
+.searchbar input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: .5rem .65rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+
+.search-results {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	background: white;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+	overflow: hidden;
+}
+
+.search-results button,
+.search-loading {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	width: 100%;
+	padding: .45rem .6rem;
+	border: 0;
+	background: white;
+	text-align: left;
+	cursor: pointer;
+}
+
+.search-results button:hover,
+.search-results button.selected {
+	background: #f2f2f2;
+}
+
+.search-type {
+	min-width: 4.5rem;
+	color: #777;
+	font-size: .75rem;
+	text-transform: uppercase;
+}
+
+.search-main {
 	font-weight: 500;
 }
 
-.active-stop td {
-	font-weight: 700;
+.search-subtitle {
+	color: #777;
+	font-size: .8rem;
+	margin-left: auto;
 }
 
-.active-stop .trip-delay,
-.near-stop .trip-delay {
-	font-weight: inherit;
+.route-pill {
+	display: inline-block;
+	min-width: 1.6rem;
+	padding: .15rem .35rem;
+	border-radius: 3px;
+	border: 1px solid #ddd;
+	background: #fafafa;
+	text-align: center;
+	font-weight: 600;
+}
+
+.trip-context {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .75rem;
+	margin: .5rem 0 .75rem 0;
+	font-size: .85rem;
+}
+
+.trip-context a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.trip-context a:hover {
+	text-decoration: underline;
+}
+
+.trip-context .current {
+	color: #777;
+	font-weight: 600;
+}
+
+.trip-context .disabled {
+	color: #aaa;
+}
+
+.route-pill.small {
+	font-size: .75rem;
+	padding: .1rem .35rem;
+	margin: 0 .25rem;
+}
+
+.link-button {
+	display: inline-flex;
+	align-items: center;
+	gap: .2rem;
+
+	padding: 0;
+	margin: 0;
+
+	border: 0;
+	background: transparent;
+
+	color: inherit;
+	font: inherit;
+	text-decoration: underline;
+
+	cursor: pointer;
+}
+
+.link-button:hover {
+	color: #000;
+}
+
+.link-button:disabled {
+	color: #aaa;
+	cursor: default;
+	text-decoration: none;
+}
+
+.link-button:focus-visible {
+	outline: 2px solid #666;
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+.muted a,
+td a {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
+}
+
+.muted a:hover,
+td a:hover {
+	color: #000;
+}
+
+.route-pill a,
+a.route-pill {
+	text-decoration: none;
 }

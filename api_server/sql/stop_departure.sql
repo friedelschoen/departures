@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 SELECT 
-	e.mode,
+	e.mode::text,
 
 	e.route_id,
 	r.route_short_name,
@@ -37,10 +37,11 @@ SELECT
 	e.terminal,
 
 	k.status,
+    k.operating_day,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
 
 	CASE 
-		WHEN e.stop_sequence = tb.start_sequence
+		WHEN e.first_stop
 		THEN GREATEST(COALESCE(k.punctuality, 0), 0)
 		ELSE COALESCE(k.punctuality, 0)
 	END as punctuality,
@@ -49,17 +50,17 @@ SELECT
 	k.block_code,
 	k.rd_x,
 	k.rd_y,
+    k.lat,
+    k.lon,
+    k.user_stop_code = e.stop_code as at_stop,
 
-	CASE
-		WHEN
-			e.mode = 'departure'
-			AND e.scheduled_time BETWEEN now()
-				AND now() + interval '5 minutes'
-			AND k.vehicle_number IS NULL
-			AND NOT e.terminal
-		THEN true
-		ELSE false
-	END AS warning
+    (
+        e.mode = 'departure'
+        AND e.scheduled_time BETWEEN now()
+            AND now() + interval '5 minutes'
+        AND k.vehicle_number IS NULL
+        AND NOT e.terminal
+    ) AS warning
 FROM active_gtfs_stop_events e
 JOIN active_gtfs_stops s
     ON s.stop_id = e.stop_id
@@ -69,8 +70,6 @@ JOIN active_gtfs_stops s
    )
 JOIN active_gtfs_trips t
     ON t.trip_id = e.trip_id
-JOIN active_gtfs_trip_bounds tb
-    ON tb.trip_id = e.trip_id
 JOIN active_gtfs_routes r
     ON r.route_id = e.route_id
 LEFT JOIN kv6_current_trip k
@@ -82,11 +81,4 @@ WHERE e.mode = $1::gtfs_stop_event_mode
 		AND
 		now() + $4::interval
 ORDER BY
-	e.scheduled_time
-		+ (
-		CASE 
-	    	WHEN e.terminal
-		    THEN GREATEST(COALESCE(k.punctuality, 0), 0)
-		    ELSE COALESCE(k.punctuality, 0)
-	    END * interval '1 second'
-		);
+	e.scheduled_time;

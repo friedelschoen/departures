@@ -1,0 +1,58 @@
+{
+	"type": "object",
+	"properties": {
+		"block_code": {
+			"type": "integer"
+		},
+		"mode": {
+			"type": "string"
+		},
+		"operating_day": {
+			"type": "string"
+		},
+		"platform_code": {
+			"type": "string"
+		},
+		"punctuality": {
+			"type": "integer"
+		},
+		"scheduled_time": {
+			"type": "integer"
+		},
+		"status": {
+			"type": "string"
+		},
+		"stop_code": {
+			"type": "string"
+		},
+		"stop_id": {
+			"type": "string"
+		},
+		"stop_name": {
+			"type": "string"
+		},
+		"stop_sequence": {
+			"type": "integer"
+		},
+		"vehicle_number": {
+			"type": "integer"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "TripStop",
+	"required": [
+		"mode",
+		"stop_sequence",
+		"stop_id",
+		"stop_code",
+		"stop_name",
+		"platform_code",
+		"scheduled_time",
+		"status",
+		"operating_day",
+		"vehicle_number",
+		"block_code",
+		"punctuality"
+	]
+}

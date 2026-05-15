@@ -1,3 +1,5 @@
+github.com/dylandreimerink/go-rijksdriehoek v1.0.0 h1:uZRhBxvsFDPPrqyI9rbKX+dF4V4k6Hj06KtAL9u71YQ=
+github.com/dylandreimerink/go-rijksdriehoek v1.0.0/go.mod h1:W8ccvYXJgoR0gIGVE1jH59avmDqCmX5KGjwvIIJp/Vw=
 github.com/lib/pq v1.12.3 h1:tTWxr2YLKwIvK90ZXEw8GP7UFHtcbTtty8zsI+YjrfQ=
 github.com/lib/pq v1.12.3/go.mod h1:/p+8NSbOcwzAEI7wiMXFlgydTwcgTr3OSKMsD2BitpA=
 github.com/pebbe/zmq4 v1.4.0 h1:gO5P92Ayl8GXpPZdYcD62Cwbq0slSBVVQRIXwGSJ6eQ=

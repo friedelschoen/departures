@@ -120,6 +120,7 @@ INSERT INTO gtfs_stop_events (
 	service_date,
 
 	trip_id,
+	direction_id,
 	realtime_trip_id,
 	realtime_trip_sequence,
 
@@ -140,6 +141,8 @@ INSERT INTO gtfs_stop_events (
 	scheduled_time,
 
 	terminal,
+	first_stop,
+	last_stop,
 	event_type,
 	timepoint,
 	shape_dist_traveled,
@@ -152,6 +155,7 @@ SELECT
 	cd.date,
 
 	t.trip_id,
+	t.direction_id,
 	t.realtime_trip_id,
 	t.realtime_trip_sequence,
 
@@ -172,6 +176,8 @@ SELECT
 	((cd.date::timestamp + st.departure_time) AT TIME ZONE a.agency_timezone),
 
 	st.stop_sequence = tb.end_sequence,
+ 	st.stop_sequence = tb.start_sequence,
+    st.stop_sequence = tb.end_sequence,
 	COALESCE(st.pickup_type, 0),
 	st.timepoint,
 	st.shape_dist_traveled,
@@ -210,6 +216,7 @@ INSERT INTO gtfs_stop_events (
 	service_date,
 
 	trip_id,
+	direction_id,
 	realtime_trip_id,
 	realtime_trip_sequence,
 
@@ -230,6 +237,8 @@ INSERT INTO gtfs_stop_events (
 	scheduled_time,
 
 	terminal,
+	first_stop,
+	last_stop,
 	event_type,
 	timepoint,
 	shape_dist_traveled,
@@ -242,6 +251,7 @@ SELECT
 	cd.date,
 
 	t.trip_id,
+	t.direction_id,
 	t.realtime_trip_id,
 	t.realtime_trip_sequence,
 
@@ -262,6 +272,8 @@ SELECT
 	((cd.date::timestamp + st.arrival_time) AT TIME ZONE a.agency_timezone),
 
 	st.stop_sequence = tb.start_sequence,
+ 	st.stop_sequence = tb.start_sequence,
+    st.stop_sequence = tb.end_sequence,
 	COALESCE(st.drop_off_type, 0),
 	st.timepoint,
 	st.shape_dist_traveled,

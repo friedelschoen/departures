@@ -37,12 +37,15 @@ SELECT
 	es.stop_name AS end_stop_name,
 
 	k.status,
+    k.operating_day,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
 	COALESCE(k.punctuality, 0) AS punctuality,
 	k.vehicle_number,
 	k.block_code,
 	k.rd_x,
-	k.rd_y
+	k.rd_y,
+    k.lat,
+    k.lon
 FROM active_gtfs_routes r
 JOIN active_gtfs_trips t
     ON t.route_id = r.route_id

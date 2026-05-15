@@ -16,12 +16,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 SELECT
-	sh.shape_pt_lat,
-	sh.shape_pt_lon,
-	sh.shape_pt_sequence
+	sh.shape_pt_lat as lat,
+	sh.shape_pt_lon as lon,
+	sh.shape_pt_sequence as seq
 FROM active_gtfs_trips t
 JOIN active_gtfs_shapes sh
-	ON sh.shape_id = t.shape_id
-WHERE t.realtime_trip_id = $1
-  AND t.realtime_trip_sequence = 1
+    ON sh.shape_id = t.shape_id
+WHERE t.trip_id = $1
 ORDER BY sh.shape_pt_sequence;

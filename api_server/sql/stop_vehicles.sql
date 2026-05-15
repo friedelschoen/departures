@@ -45,6 +45,8 @@ SELECT
 	COALESCE(v.punctuality, 0) AS punctuality,
 	v.rd_x,
 	v.rd_y,
+    v.lat,
+    v.lon,
 
 	s.stop_id,
 	s.stop_name,
@@ -74,6 +76,6 @@ LEFT JOIN active_gtfs_routes r
 WHERE t.trip_id IS NULL
    OR cd.service_id IS NOT NULL
 ORDER BY
-	s.stop_code,
-	v.event_timestamp DESC,
-	v.vehicle_number;
+    v.punctuality DESC,
+	v.vehicle_number,
+	v.event_timestamp DESC;

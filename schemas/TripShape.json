@@ -1,0 +1,22 @@
+{
+	"type": "object",
+	"properties": {
+		"lat": {
+			"type": "number"
+		},
+		"lon": {
+			"type": "number"
+		},
+		"seq": {
+			"type": "integer"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "TripShape",
+	"required": [
+		"lat",
+		"lon",
+		"seq"
+	]
+}

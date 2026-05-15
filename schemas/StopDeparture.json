@@ -1,0 +1,98 @@
+{
+	"type": "object",
+	"properties": {
+		"at_stop": {
+			"type": "boolean"
+		},
+		"block_code": {
+			"type": "integer"
+		},
+		"headsign": {
+			"type": "string"
+		},
+		"last_seen": {
+			"type": "integer"
+		},
+		"lat": {
+			"type": "number"
+		},
+		"lon": {
+			"type": "number"
+		},
+		"mode": {
+			"type": "string"
+		},
+		"operating_day": {
+			"type": "string"
+		},
+		"platform_code": {
+			"type": "string"
+		},
+		"punctuality": {
+			"type": "integer"
+		},
+		"rd_x": {
+			"type": "integer"
+		},
+		"rd_y": {
+			"type": "integer"
+		},
+		"route_color": {
+			"type": "string"
+		},
+		"route_id": {
+			"type": "string"
+		},
+		"route_short_name": {
+			"type": "string"
+		},
+		"route_text_color": {
+			"type": "string"
+		},
+		"scheduled_time": {
+			"type": "integer"
+		},
+		"status": {
+			"type": "string"
+		},
+		"terminal": {
+			"type": "boolean"
+		},
+		"trip_id": {
+			"type": "string"
+		},
+		"vehicle_number": {
+			"type": "integer"
+		},
+		"warning": {
+			"type": "boolean"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "StopDeparture",
+	"required": [
+		"mode",
+		"route_id",
+		"route_short_name",
+		"route_color",
+		"route_text_color",
+		"trip_id",
+		"headsign",
+		"platform_code",
+		"scheduled_time",
+		"terminal",
+		"status",
+		"operating_day",
+		"last_seen",
+		"punctuality",
+		"vehicle_number",
+		"block_code",
+		"rd_x",
+		"rd_y",
+		"lat",
+		"lon",
+		"at_stop",
+		"warning"
+	]
+}

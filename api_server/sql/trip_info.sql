@@ -28,19 +28,22 @@ SELECT
 	r.route_color,
 	r.route_text_color,
 
-	tb.start_time,
-	tb.end_time,
+    EXTRACT(EPOCH FROM tb.start_time)::bigint as start_time,
+    EXTRACT(EPOCH FROM tb.end_time)::bigint as end_time,
 	tb.start_stop,
 	tb.end_stop,
 
 	k.status,
+    k.operating_day,
 	EXTRACT(EPOCH FROM k.event_timestamp)::bigint AS last_seen,
 	k.vehicle_number,
     k.data_owner_code,
 	k.block_code,
 	k.punctuality,
 	k.rd_x,
-	k.rd_y
+	k.rd_y,
+    k.lat,
+    k.lon
 FROM active_gtfs_trips t
 JOIN active_gtfs_routes r
     ON r.route_id = t.route_id

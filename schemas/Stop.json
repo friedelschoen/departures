@@ -1,0 +1,54 @@
+{
+	"type": "object",
+	"properties": {
+		"location_type": {
+			"type": "integer"
+		},
+		"parent_station": {
+			"type": "string"
+		},
+		"platform_code": {
+			"type": "string"
+		},
+		"stop_code": {
+			"type": "string"
+		},
+		"stop_id": {
+			"type": "string"
+		},
+		"stop_lat": {
+			"type": "number"
+		},
+		"stop_lon": {
+			"type": "number"
+		},
+		"stop_name": {
+			"type": "string"
+		},
+		"stop_timezone": {
+			"type": "string"
+		},
+		"wheelchair_boarding": {
+			"type": "integer"
+		},
+		"zone_id": {
+			"type": "string"
+		}
+	},
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Source at https://github.com/friedelschoen/departures",
+	"title": "Stop",
+	"required": [
+		"stop_id",
+		"stop_code",
+		"stop_name",
+		"stop_lat",
+		"stop_lon",
+		"location_type",
+		"parent_station",
+		"stop_timezone",
+		"wheelchair_boarding",
+		"platform_code",
+		"zone_id"
+	]
+}

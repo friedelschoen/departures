@@ -42,26 +42,10 @@ CREATE TABLE IF NOT EXISTS kv6_events (
     punctuality INTEGER,
 	rd_x INTEGER,
 	rd_y INTEGER,
+    lat double precision,
+    lon double precision,
 	distance_since_last_user_stop INTEGER
 );
-
-CREATE INDEX IF NOT EXISTS kv6_events_id_idx
-ON kv6_events (id);
-
-CREATE INDEX IF NOT EXISTS kv6_events_journey_time_idx
-ON kv6_events (operating_day, realtime_trip_id, event_timestamp DESC);
-
-CREATE INDEX IF NOT EXISTS kv6_events_vehicle_time_idx
-ON kv6_events (operating_day, data_owner_code, vehicle_number, event_timestamp DESC)
-WHERE vehicle_number IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS kv6_events_block_time_idx
-ON kv6_events (operating_day, data_owner_code, block_code, event_timestamp DESC)
-WHERE block_code IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS kv6_events_stop_time_idx
-ON kv6_events (user_stop_code, event_timestamp DESC)
-WHERE user_stop_code IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS kv6_current_trip (
 	operating_day DATE NOT NULL,
@@ -83,6 +67,8 @@ CREATE TABLE IF NOT EXISTS kv6_current_trip (
 	punctuality INTEGER,
 	rd_x INTEGER,
 	rd_y INTEGER,
+    lat double precision,
+    lon double precision,
 
 	last_event_id BIGINT NOT NULL,
 
@@ -97,14 +83,6 @@ CREATE TABLE IF NOT EXISTS kv6_current_trip (
 
 CREATE UNIQUE INDEX IF NOT EXISTS kv6_current_trip_key_idx
 ON kv6_current_trip (operating_day, realtime_trip_id);
-
-CREATE INDEX IF NOT EXISTS kv6_current_trip_vehicle_idx
-ON kv6_current_trip (operating_day, data_owner_code, vehicle_number)
-WHERE vehicle_number IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS kv6_current_trip_block_idx
-ON kv6_current_trip (operating_day, data_owner_code, block_code)
-WHERE block_code IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS kv6_current_vehicle (
 	operating_day DATE NOT NULL,
@@ -126,6 +104,8 @@ CREATE TABLE IF NOT EXISTS kv6_current_vehicle (
 
 	rd_x INTEGER,
 	rd_y INTEGER,
+    lat double precision,
+    lon double precision,
 
 	last_event_id BIGINT NOT NULL,
 
@@ -135,13 +115,6 @@ CREATE TABLE IF NOT EXISTS kv6_current_vehicle (
 		vehicle_number
 	)
 );
-
-CREATE INDEX IF NOT EXISTS kv6_current_vehicle_trip_idx
-ON kv6_current_vehicle (operating_day, realtime_trip_id);
-
-CREATE INDEX IF NOT EXISTS kv6_current_vehicle_block_idx
-ON kv6_current_vehicle (operating_day, data_owner_code, block_code)
-WHERE block_code IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS kv6_trip_stop_status (
 	operating_day DATE NOT NULL,
@@ -158,11 +131,12 @@ CREATE TABLE IF NOT EXISTS kv6_trip_stop_status (
 	event_timestamp TIMESTAMPTZ NOT NULL,
 
 	vehicle_number INTEGER,
-	block_code INTEGER,
 	punctuality INTEGER,
 
 	rd_x INTEGER,
 	rd_y INTEGER,
+    lat double precision,
+    lon double precision,
 
 	last_event_id BIGINT NOT NULL,
 
@@ -173,15 +147,10 @@ CREATE TABLE IF NOT EXISTS kv6_trip_stop_status (
 		trip_short_name,
 		reinforcement_number,
 		user_stop_code,
-		passage_sequence_number
+		passage_sequence_number,
+        status
 	)
 );
-
-CREATE INDEX IF NOT EXISTS kv6_trip_stop_status_trip_idx
-ON kv6_trip_stop_status (operating_day, realtime_trip_id, passage_sequence_number);
-
-CREATE INDEX IF NOT EXISTS kv6_trip_stop_status_stop_idx
-ON kv6_trip_stop_status (user_stop_code, event_timestamp DESC);
 
 CREATE TABLE IF NOT EXISTS kv6_vehicle_trip_history (
 	operating_day DATE NOT NULL,
@@ -190,6 +159,7 @@ CREATE TABLE IF NOT EXISTS kv6_vehicle_trip_history (
 	realtime_trip_id TEXT NOT NULL,
 
 	line_planning_number TEXT NOT NULL,
+    trip_id TEXT NOT NULL, 
 	trip_short_name INTEGER NOT NULL,
 	reinforcement_number INTEGER NOT NULL DEFAULT 0,
 
@@ -208,23 +178,6 @@ CREATE TABLE IF NOT EXISTS kv6_vehicle_trip_history (
 		realtime_trip_id
 	)
 );
-
-CREATE INDEX IF NOT EXISTS kv6_vehicle_trip_history_vehicle_idx
-ON kv6_vehicle_trip_history (
-	operating_day,
-	data_owner_code,
-	vehicle_number,
-	first_seen
-);
-
-CREATE INDEX IF NOT EXISTS kv6_vehicle_trip_history_block_idx
-ON kv6_vehicle_trip_history (
-	operating_day,
-	data_owner_code,
-	block_code,
-	first_seen
-)
-WHERE block_code IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS kv6_block_trip_history (
 	operating_day DATE NOT NULL,
@@ -248,14 +201,6 @@ CREATE TABLE IF NOT EXISTS kv6_block_trip_history (
 		block_code,
 		realtime_trip_id
 	)
-);
-
-CREATE INDEX IF NOT EXISTS kv6_block_trip_history_lookup_idx
-ON kv6_block_trip_history (
-	operating_day,
-	data_owner_code,
-	block_code,
-	first_seen
 );
 
 CREATE TABLE IF NOT EXISTS kv6_projection_offsets (
