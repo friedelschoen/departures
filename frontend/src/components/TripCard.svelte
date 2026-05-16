@@ -1,11 +1,14 @@
 <script lang="ts">
     import { vehicleURL, blockURL, routeURL } from "../lib/links";
     import MapView from "./MapView.svelte";
-    import TripStopTable from "./TripStopTable.svelte";
 
     import type { Trip } from "../schema/Trip";
 
     export let trip: string;
+
+    let viewedTrip = "";
+    let publicTrip = "";
+    let loadedTrip = "";
 
     let info: Trip | null = null;
     let loading = false;
@@ -25,19 +28,33 @@
     $: previous = context.find((c) => c.relation === "previous") ?? null;
     $: next = context.find((c) => c.relation === "next") ?? null;
 
-    async function load() {
-        /*info = null;
-        stops = [];
-        context = [];*/
+    $: if (trip && trip !== publicTrip) {
+        publicTrip = trip;
+        viewedTrip = trip;
+    }
+
+    $: if (viewedTrip && viewedTrip !== loadedTrip) {
+        loadedTrip = viewedTrip;
+        load(viewedTrip);
+    }
+
+    async function load(currentTrip: string) {
         loading = true;
 
         try {
-            [info, context] = await Promise.all([
-                fetchJSON("/api/trip/" + encodeURIComponent(trip)),
-                fetchJSON("/api/trip/" + encodeURIComponent(trip) + "/context"),
+            const [newInfo, newContext] = await Promise.all([
+                fetchJSON("/api/trip/" + encodeURIComponent(currentTrip)),
+                fetchJSON(
+                    "/api/trip/" + encodeURIComponent(currentTrip) + "/context",
+                ),
             ]);
+
+            if (currentTrip !== viewedTrip) return;
+
+            info = newInfo;
+            context = newContext;
         } finally {
-            loading = false;
+            if (currentTrip === viewedTrip) loading = false;
         }
     }
 
@@ -74,15 +91,10 @@
     async function fetchJSON(url: URL | RequestInfo) {
         const res = await fetch(url);
         const json = await res.json();
+
         if (!res.ok) throw new Error(json?.error ?? res.statusText);
+
         return json.result;
-    }
-
-    let loadedTrip = "";
-
-    $: if (trip && trip !== loadedTrip) {
-        loadedTrip = trip;
-        load();
     }
 </script>
 
@@ -90,48 +102,47 @@
     {#if loading}
         <b>Loading trip...</b>
     {/if}
+
     {#if info}
         <div class="trip-card-header">
-            <div class="trip-card-header">
-                <div>
-                    <b>{info.route_short_name ?? ""}</b>
-                    {info.trip_headsign ?? ""}
-                    <div class="muted">
-                        trip {info.trip_id}
+            <div>
+                <b>{info.route_short_name ?? ""}</b>
+                {info.trip_headsign ?? ""}
 
-                        {#if info.route_id}
-                            — <a href={routeURL(info.route_id)}
-                                >route {info.route_short_name ??
-                                    info.route_id}</a
-                            >
-                        {/if}
+                <div class="muted">
+                    trip {info.trip_id}
 
-                        {#if info.vehicle_number}
-                            — <a
-                                href={vehicleURL(
-                                    info.data_owner_code,
-                                    info.vehicle_number,
-                                )}
-                            >
-                                vehicle {info.vehicle_number}
-                            </a>
-                        {/if}
+                    {#if info.route_id}
+                        — <a href={routeURL(info.route_id)}>
+                            route {info.route_short_name ?? info.route_id}
+                        </a>
+                    {/if}
 
-                        {#if info.block_code}
-                            — <a
-                                href={blockURL(
-                                    info.data_owner_code,
-                                    info.block_code,
-                                )}
-                            >
-                                block {info.block_code}
-                            </a>
-                        {/if}
+                    {#if info.vehicle_number}
+                        — <a
+                            href={vehicleURL(
+                                info.data_owner_code,
+                                info.vehicle_number,
+                            )}
+                        >
+                            vehicle {info.vehicle_number}
+                        </a>
+                    {/if}
 
-                        {#if info.status}
-                            — {statusText(info.status)}
-                        {/if}
-                    </div>
+                    {#if info.block_code}
+                        — <a
+                            href={blockURL(
+                                info.data_owner_code,
+                                info.block_code,
+                            )}
+                        >
+                            block {info.block_code}
+                        </a>
+                    {/if}
+
+                    {#if info.status}
+                        — {statusText(info.status)}
+                    {/if}
                 </div>
             </div>
         </div>
@@ -140,7 +151,7 @@
             {#if previous}
                 <button
                     class="link-button"
-                    on:click={() => (trip = previous.trip_id)}
+                    on:click={() => (viewedTrip = previous.trip_id)}
                 >
                     ← <span
                         class="route-pill small"
@@ -159,7 +170,7 @@
             {#if next}
                 <button
                     class="link-button"
-                    on:click={() => (trip = next.trip_id)}
+                    on:click={() => (viewedTrip = next.trip_id)}
                 >
                     <span class="route-pill small" style={lineStyle(next)}>
                         {next.route_short_name ?? next.route_id}
@@ -171,10 +182,12 @@
             {/if}
         </div>
 
-        <MapView tripID={trip} vehicle={info} />
+        <MapView tripID={viewedTrip} vehicle={info} />
 
         <div class="trip-card-links">
-            <a href={`/trip/${encodeURIComponent(trip)}`}>open trip details</a>
+            <a href={`/trip/${encodeURIComponent(viewedTrip)}`}>
+                open trip details
+            </a>
         </div>
     {:else if !loading}
         No trip data found.
