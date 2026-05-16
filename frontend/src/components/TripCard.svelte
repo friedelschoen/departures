@@ -4,12 +4,10 @@
     import TripStopTable from "./TripStopTable.svelte";
 
     import type { Trip } from "../schema/Trip";
-    import type { TripStop } from "../schema/TripStop";
 
     export let trip: string;
 
     let info: Trip | null = null;
-    let stops: TripStop[] = [];
     let loading = false;
 
     type TripContext = {
@@ -28,22 +26,15 @@
     $: next = context.find((c) => c.relation === "next") ?? null;
 
     async function load() {
-        info = null;
+        /*info = null;
         stops = [];
-        context = [];
+        context = [];*/
         loading = true;
 
         try {
-            await Promise.all([
-                fetchJSON("/api/trip/" + encodeURIComponent(trip)).then(
-                    (r) => (info = r),
-                ),
-                fetchJSON(
-                    "/api/trip/" + encodeURIComponent(trip) + "/stops",
-                ).then((r) => (stops = r)),
-                fetchJSON(
-                    "/api/trip/" + encodeURIComponent(trip) + "/context",
-                ).then((r) => (context = r)),
+            [info, context] = await Promise.all([
+                fetchJSON("/api/trip/" + encodeURIComponent(trip)),
+                fetchJSON("/api/trip/" + encodeURIComponent(trip) + "/context"),
             ]);
         } finally {
             loading = false;
@@ -182,7 +173,9 @@
 
         <MapView tripID={trip} vehicle={info} />
 
-        <TripStopTable {stops} />
+        <div class="trip-card-links">
+            <a href={`/trip/${encodeURIComponent(trip)}`}>open trip details</a>
+        </div>
     {:else if !loading}
         No trip data found.
     {/if}

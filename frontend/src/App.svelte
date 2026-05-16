@@ -5,6 +5,7 @@
     import RoutePage from "./pages/RoutePage.svelte";
     import BlockPage from "./pages/BlockPage.svelte";
     import VehiclePage from "./pages/VehiclePage.svelte";
+    import TripPage from "./pages/TripPage.svelte";
 
     export let url = "";
 </script>
@@ -23,6 +24,9 @@
     </Route>
     <Route path="/route/:route" let:params>
         <RoutePage route={params.route} />
+    </Route>
+    <Route path="/trip/:trip" let:params>
+        <TripPage trip={params.trip} />
     </Route>
     <Route path="/">
         <StopPage stop={"stoparea:449933"} />
